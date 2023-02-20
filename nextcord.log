@@ -81,3 +81,5 @@
 2023-02-20 21:13:31,318:DEBUG:nextcord.gateway: For Shard ID None: WebSocket Event: {"t":null,"s":null,"op":11,"d":null}
 2023-02-20 21:14:12,436:DEBUG:nextcord.gateway: Keeping shard ID None websocket alive with sequence 10.
 2023-02-20 21:14:12,580:DEBUG:nextcord.gateway: For Shard ID None: WebSocket Event: {"t":null,"s":null,"op":11,"d":null}
+2023-02-20 21:14:53,693:DEBUG:nextcord.gateway: Keeping shard ID None websocket alive with sequence 10.
+2023-02-20 21:14:53,834:DEBUG:nextcord.gateway: For Shard ID None: WebSocket Event: {"t":null,"s":null,"op":11,"d":null}
