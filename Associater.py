@@ -7,6 +7,7 @@ import datetime
 from typing import Optional
 from nextcord import Interaction, SlashOption, Colour
 from nextcord.ext import commands, tasks
+from nextcord.utils import get
 from pyparsing import List
 
 from aux_libraries import database
@@ -37,6 +38,20 @@ valid_stations = ['alchemy', 'butcher', 'cook', 'hunter', 'lumbermill', 'mage', 
 stations_images = {}
 stations_list = {}
 request_channels = ['1076824842155860059', '1076824842155860060', '1076824842155860061', '1076824842155860062', '1076824842155860063', '1076824842155860064']
+
+def _set_embed_colour(city):
+    if city == 'sterling':
+        return (0xFFFFFF)
+    if city == 'lymhurst':
+        return (Colour.green())
+    if city == 'bridgewatch':
+        return (Colour.orange())
+    if city == 'martlock':
+        return (Colour.blue())
+    if city == 'thetford':
+        return (Colour.purple())
+    if city == 'caerleon':
+        return (Colour.red())
 
 def _update_stations_list():
     global stations_list
@@ -86,18 +101,7 @@ async def display_stations(
             for owner in stations_list[city][station]:
                 description += (f' <@{str(owner)}>')
         
-        if city == 'sterling':
-            embedColor = 0xFFFFFF
-        if city == 'lymhurst':
-            embedColor = Colour.green()
-        if city == 'bridgewatch':
-            embedColor = Colour.orange()
-        if city == 'martlock':
-            embedColor = Colour.blue()
-        if city == 'thetford':
-            embedColor = Colour.purple()
-        if city == 'caerleon':
-            embedColor = Colour.red()
+        embedColor = _set_embed_colour(city)
 
         em = nextcord.Embed(
                 description=description,
@@ -111,18 +115,7 @@ async def display_stations(
         await interaction.response.send_message(f"{city} doesn't have image set, please set image for the city and try again. If problem keeps appearing please contact Hituh", ephemeral=True, delete_after=5)         
 
     elif city not in stations_list:
-        if city == 'sterling':
-            embedColor = 0xFFFFFF
-        if city == 'lymhurst':
-            embedColor = Colour.green()
-        if city == 'bridgewatch':
-            embedColor = Colour.orange()
-        if city == 'martlock':
-            embedColor = Colour.blue()
-        if city == 'thetford':
-            embedColor = Colour.purple()
-        if city == 'caerleon':
-            embedColor = Colour.red()
+        embedColor = _set_embed_colour(city)
         description = f"We currently don't own any shops in {city.title()}, please wait for the next cycle."
         em = nextcord.Embed(
                 description=description,
@@ -321,13 +314,43 @@ async def request(
                 are_stations_available = False
                 stations_not_avaiable += f'{request.title()} '
             request_string += f'{request.title()} '
-        if(requests == None):
+        if not requests:
             await interaction.response.send_message(f"You need to select at least one station.", ephemeral=True, delete_after=30) 
         elif(are_stations_available == False and requests != None):
             await interaction.response.send_message(f"{stations_not_avaiable}are currently not avaiable in {city.title()}. Please check the list of avaiable stations in the city and try again.", ephemeral=True, delete_after=30) 
+        #Thread created
         elif(are_stations_available == True and requests != None):
             await interaction.response.send_message(f"You are requesting {request_string}in {city.title()}, private thread will be opened shortly.", ephemeral=True, delete_after=30)
-
+            thread = await interaction.channel.create_thread(name=f'{interaction.user.name} request', message=None, auto_archive_duration=60, type=None)
+            await thread.add_user(interaction.user)
+            guild = bot.get_guild(int(os.getenv('TESTSERVER_ID')))
+            owner_ids = []
+            for station in stations_list[city].keys():
+                if(station in requests and stations_list[city][station] not in owner_ids):
+                    for owner in stations_list[city][station]:
+                        owner_ids.append(owner)
+            for owner in owner_ids:
+                member = guild.get_member(owner)
+                await thread.add_user(member)
+            #Embed creation
+            embedColor = _set_embed_colour(city)
+            description = f"Associate request for **{city}**. Stations:\n"
+            for request in requests:
+                description += f"{request.title()}\n"
+            if(alliancename == None and guildname == None):
+                description += f"Request for player {nickname}\n"
+            if(alliancename == None and guildname != None):
+                description += f"Request for guild {guildname}\n"
+            if(alliancename != None):
+                description += f"Request for alliance {alliancename}\n"   
+            em = nextcord.Embed(
+                    description=description,
+                    color=embedColor
+                )
+            em.set_author(name=f'Request made by: {interaction.user.name}', icon_url=f'{interaction.user.avatar}')
+            em.set_footer(text=f'Request made at: {datetime.datetime.utcnow().strftime("%Y-%m-%d, %H:%M")} UTC\n',)
+            await thread.send(embed=em)
+            
 if __name__ == '__main__':
 
     database.connect('stations.db')
@@ -338,5 +361,6 @@ if __name__ == '__main__':
 
     _update_stations_list()
     _update_stations_images()
-
+    
+            
     bot.run(os.getenv('BOT_TOKEN'))
