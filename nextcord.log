@@ -81,3 +81,5 @@
 2023-02-21 21:30:53,785:DEBUG:nextcord.client: Dispatching event raw_message_delete
 2023-02-21 21:30:53,785:DEBUG:nextcord.client: Dispatching event message_delete
 2023-02-21 21:30:53,796:DEBUG:nextcord.webhook.async_: Webhook ID 1076825370499756093 with DELETE https://discord.com/api/v10/webhooks/1076825370499756093/aW50ZXJhY3Rpb246MTA3NzY4ODgyODc2NjIwMzk0NDp5MWRvN3RhbUpGM2wyeG1uM1ZaSkpsT2xxMVJQRlBmWEdLTTV6b0FaSkh2T1podnNKMTN5Tkd2NjNWV3ZLZklzRVQ3NzVvYVVFVEJxaVB0VGt0MzFMekQxVzBpb0lXYllkd1VWWHpmbE45ajlwRFpybXlIZ1VqS1F2UGZuaDA4Zw/messages/@original has returned status code 204
+2023-02-21 21:31:23,602:DEBUG:nextcord.gateway: Keeping shard ID None websocket alive with sequence 11.
+2023-02-21 21:31:23,740:DEBUG:nextcord.gateway: For Shard ID None: WebSocket Event: {"t":null,"s":null,"op":11,"d":null}
