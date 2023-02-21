@@ -122,7 +122,7 @@ class Player:
         if not self.guild_id:
             return False
 
-        last_week_url = 'https://gameinfo.albiononline.com/api/gameinfo/players/statistics?range=lastWeek&limit=300&offset=0&type=Crafting&region=Total&guildId='
+        last_week_url = 'https://gameinfo.albiononline.com/api/gameinfo/players/statistics?range=lastWeek&limit=30&offset=0&type=Crafting&region=Total&guildId='
 
         max_tries = 6
         status_code = 0
