@@ -21,12 +21,6 @@ intents = nextcord.Intents.all()
 intents.members = True
 bot = commands.Bot(intents=discord.Intents.all())
 
-logger = logging.getLogger('nextcord')
-logger.setLevel(logging.DEBUG)
-handler = logging.FileHandler(filename='nextcord.log', encoding='utf-8', mode='w')
-handler.setFormatter(logging.Formatter('%(asctime)s:%(levelname)s:%(name)s: %(message)s'))
-logger.addHandler(handler)
-
 @bot.event
 async def on_ready():
     print(f'        {bot.user} has connected to Discord!\n        Currently it is connected to the following servers:')
