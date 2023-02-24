@@ -265,7 +265,7 @@ async def remove_coowner(
         
 @bot.slash_command(description='Delete as station from owner', guild_ids=[int(os.getenv('TESTSERVER_ID'))], default_member_permissions=8)
 async def delete_station(
-    interaction: nextcord.Interaction, 
+    interaction: nextcord.Interaction,
     city: str = SlashOption(name='city', description='Chosen city', choices={
        'Sterling': 'sterling',
        'Lymhurst': 'lymhurst',
@@ -432,6 +432,18 @@ async def get_userid(
     interaction: nextcord.Interaction, 
     nickname: str = SlashOption(description="Your in-game nickname. After writing your name press TAB to see other options.")):
     await interaction.response.send_message(f"{_get_user_id(nickname)}", ephemeral=True, delete_after=30)         
+        
+   
+@bot.slash_command(description="Sends close button and done message to all threads in the channel.", guild_ids=[int(os.getenv('TESTSERVER_ID'))], default_member_permissions=8)
+async def send_done(
+    interaction: nextcord.Interaction):
+    if interaction.channel.type == private_thread:
+        
+    print(interaction.channel.type)
+    threads_list = channel.threads
+    for thread in threads_list:
+        await thread.send(f"<:done:914779893337777778> {interaction.user.mention} has requested to close the private thread.", ephemeral=True, delete_after=30)
+        
         
 if __name__ == '__main__':
 
