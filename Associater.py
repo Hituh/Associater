@@ -290,7 +290,7 @@ async def remove_coowner(
 #Deletes chosen station in city from selected owner. Defaults to interaction.user       
 @bot.slash_command(description='Delete as station from owner', guild_ids=[int(os.getenv('TESTSERVER_ID'))], default_member_permissions=8)
 async def delete_station(
-    interaction: nextcord.Interaction, 
+    interaction: nextcord.Interaction,
     city: str = SlashOption(name='city', description='Chosen city', choices={
        'Sterling': 'sterling',
        'Lymhurst': 'lymhurst',
