@@ -360,7 +360,7 @@ async def request(
         nickname: str = SlashOption(description="Your in-game nickname. After writing your name press TAB to see other options."),
         guildname: Optional[str] = SlashOption(description="If you're requesting for a guild, please write your full guild name."),
         alliancename: Optional[str] = SlashOption(description="If you're requesting for an alliance, please write your full alliance name."),
-        alchemist: Optional[str] = SlashOption(description="Select this option and then select 'Yes I want this station' to add Alchemist's Lab to your request.", choices={'Yes I want this station'}),
+        alchemist: Optional[str] = SlashOption(description="Select this option and then select 'Yes I want this station' to add Alchemist's Lab to your request."),
         butcher: Optional[str] = SlashOption(description="Select this option and then select 'Yes I want this station' to add Butcher to your request.", choices={'Yes I want this station'}),
         cook: Optional[str] = SlashOption(description="Select this option and then select 'Yes I want this station' to add Cook to your request.", choices={'Yes I want this station'}),
         hunter: Optional[str] = SlashOption(description="Select this option and then select 'Yes I want this station' to add Hunter's Lodge to your request.", choices={'Yes I want this station'}),
@@ -512,7 +512,18 @@ async def archive_done_threads(
         await interaction.response.send_message(f"Done archiving {counter} threads older than {amount} seconds from current channel.", ephemeral=True, delete_after=5)
     else:
         await interaction.response.send_message(f"Didn't find any threads older than {amount} seconds.", ephemeral=True, delete_after=5)
-         
+        
+@bot.slash_command(description="Sends close button and done message to all threads in the channel.", guild_ids=[int(os.getenv('TESTSERVER_ID'))], default_member_permissions=8)
+async def send_done(
+    interaction: nextcord.Interaction):
+    if str(interaction.channel.type) == 'private_thread':
+        channel = interaction.channel.parent
+    else:
+        channel = interaction.channel
+    threads_list = channel.threads
+    for thread in threads_list:
+        await thread.send(f"Your request have been fulfilled. Press the button below to close the thread. If you think something's missing let us know")
+
 if __name__ == '__main__':
 
     database.connect('stations.db')
