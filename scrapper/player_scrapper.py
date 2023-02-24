@@ -145,8 +145,6 @@ class Player:
 
 
 def main():
-
-
     players_list = ['Hunter01', ]
 
 
