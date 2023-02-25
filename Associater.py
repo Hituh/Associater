@@ -1,18 +1,16 @@
 import os
 import nextcord
 import discord
-import logging
 import datetime
+import threading
 
 from typing import Optional
 from nextcord import Interaction, SlashOption, Colour
-from nextcord.ext import commands, tasks
-from nextcord.utils import get
-from pyparsing import List
+from nextcord.ext import commands
+from scrapper.id_scrapper import id_scrapper
 import pytz
 
 from aux_libraries import database
-import pandas as pd
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -34,6 +32,105 @@ stations_images = {}
 stations_list = {}
 stations_coowners_list = {}
 request_channels = ['1076824842155860059', '1076824842155860060', '1076824842155860061', '1076824842155860062', '1076824842155860063', '1076824842155860064']
+
+
+class ButtonRequest(nextcord.ui.View):
+    def __init__(self, request_type, city, name, avaiable_stations):
+        super().__init__(timeout=None)
+        self.value = None
+        self.message = None 
+        self.city = city
+        self.request_type = request_type
+        self.name = name
+        self.avaiable_stations = avaiable_stations
+         
+    @nextcord.ui.button(label="Confirm", style=nextcord.ButtonStyle.green)
+    async def finish(self, button: nextcord.ui.Button, interaction: Interaction):
+        reactions = interaction.message.reactions
+        stations_to_add = []
+        owners_list = []
+        request_items_message = ""
+
+        # loop through each reaction and get the station name if it has more than one reaction
+        for reaction in reactions:
+            if reaction.count > 1:
+                stations_to_add.append(str(reaction)[2:-21])
+                request_items_message += f"\n{str(reaction)[2:-21].title()}"
+
+        # loop through the selected stations and get their owners
+        for request in stations_to_add:
+            if request in stations_list[self.city]:
+                for owner in stations_list[self.city][request]:
+                    if owner not in owners_list:
+                        owners_list.append(owner)
+
+                        # add co-owners to the owners list
+                        if self.city in stations_coowners_list and request in stations_coowners_list[self.city] and owner in stations_coowners_list[self.city][request]:
+                            for coowner in stations_coowners_list[self.city][request][owner]:
+                                if coowner not in owners_list:
+                                    owners_list.append(coowner)
+
+        # if no stations were selected, send a message indicating so
+        if not stations_to_add:
+            await interaction.response.send_message("```If it wasn't obvious you need to choose at least one station you'd like to request.```", ephemeral=True, delete_after=30)
+
+        # if stations were selected, send a message to the owners list with the request
+        else:
+            owners_message = ' '.join([f"<@{owner}>" for owner in owners_list])
+            await interaction.channel.send(f"{owners_message} here is <@{interaction.user.id}> **{self.request_type}** request for **{self.name}**")
+
+            embed = discord.Embed(title="Stations list", description=f"{request_items_message}")
+            await interaction.channel.send(embed=embed)
+            # handle solo requests
+            if str(self.request_type) == 'solo' and len(stations_to_add) == self.avaiable_stations and len(stations_to_add) > 3:
+                await interaction.channel.send(f"<@{interaction.user.id}> despite us asking to be mindful, you still requested all possible stations for a solo user. \nPlease provide explanation to why you would need access to all these stations.")
+                
+            # handle guild requests
+            if str(self.request_type) == 'guild':
+                embed = discord.Embed(description=f"<@{interaction.user.id}> please send screenshot of your guild looking like this:")
+                embed.set_image("https://cdn.discordapp.com/attachments/841398443885068309/1079124508142731264/image.png")
+                await interaction.channel.send(embed=embed)
+            # handle alliance requests
+            if str(self.request_type) == 'alliance':
+                embed = discord.Embed(description=f"<@{interaction.user.id}> please send screenshot of your alliance looking like this:")
+                embed.set_image("https://cdn.discordapp.com/attachments/841398443885068309/1079124554254925844/image.png")
+                await interaction.channel.send(embed=embed)
+                
+            await self.message.delete()
+    @nextcord.ui.button(label="Cancel", style=nextcord.ButtonStyle.red)
+    async def cancel(self, button: nextcord.ui.Button, interaction: Interaction):
+        print(f"{interaction.user} has closed the thread {interaction.channel}")
+        await interaction.channel.delete()
+
+        
+class ButtonFinish(nextcord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+        self.message = None
+    
+    @nextcord.ui.button(label="Finish", style=nextcord.ButtonStyle.green)
+    async def finish(self, button: nextcord.ui.Button, interaction: Interaction):
+        try:
+            await self.message.delete()
+            await interaction.channel.send(f"```Request closed by {interaction.user}```")
+            await interaction.channel.edit(archived=True)
+        except:
+            print("Button has been already used")
+
+
+def _delete_archived_threads():
+    # This function runs periodically every 1 second
+    threading.Timer(1, _delete_archived_threads).start()
+
+    now = datetime.datetime.now()
+
+    current_time = now.strftime("%H:%M:%S")
+    print("Current Time =", current_time)
+
+    if(current_time == '02:11:00'):  # check if matches with the desired time
+        print('sending message')
+    for thread in threading.enumerate(): 
+        print(thread.name)
 
 #Returns city string based on interaction.channel.id
 def _get_city_by_id(channel_id):
@@ -114,12 +211,12 @@ def _get_user_id(value):
             if member.name.lower() == value.lower():
                 user_id = member.id
     return user_id
-      
+              
 #Displays embed of current stations in chosen city
 @bot.slash_command(description='Shows information about stations in specified city.', guild_ids=[int(os.getenv('TESTSERVER_ID'))], default_member_permissions=8)
 async def display_stations(
     interaction: nextcord.Interaction, 
-    city: str = SlashOption(name='city', description='Choose city to display stations info.', choices={
+    city: str = SlashOption(name='city', description='Choose city to display.', choices={
         'Sterling': 'sterling',
         'Lymhurst': 'lymhurst',
         'Bridgewatch': 'bridgewatch',
@@ -133,19 +230,18 @@ async def display_stations(
     #Check if image exists in database
     if city in stations_images and city in stations_list.keys(): 
         image = stations_images[city.lower()]
-        description = (f'**Avaiable shops in {city.title()}**\n*For more info check <#1076945622185295912>*')
+        description = (f'**Avaiable shops in {city.title()}**')
         await interaction.response.send_message(f"*You have selected {city} to display, the full message will be shown shortly*", ephemeral=True, delete_after=15)         
         
         #Creates owners and co-owners string to display in embed
-        for station in stations_list[city]:
-            description += (f'\n**{station.title()}**')
-            for owner in stations_list[city][station]:
-                description += (f'\nOwner - <@{str(owner)}>') 
-                if city in stations_coowners_list and station in stations_coowners_list[city] and owner in stations_coowners_list[city][station]:
-                    description += (f' Co-owners -')
-                    for coowner in stations_coowners_list[city][station][owner]:
-                        description += (f' <@{str(coowner)}>')  
-        
+        for station, owners in stations_list[city].items():
+            description += f'\n**{station.title()}**'
+            for owner in owners:
+                description += f'\nOwner - <@{owner}>'
+                if city in stations_coowners_list.get(station, {}) and owner in stations_coowners_list[station][city]:
+                    description += ' Co-owners -'
+                    description += ''.join(f' <@{coowner}>' for coowner in stations_coowners_list[city][station][owner])
+ 
         #Embed creation          
         embedColor = _set_embed_colour(city)
         em = nextcord.Embed(
@@ -156,8 +252,6 @@ async def display_stations(
         em.set_footer(text=f'Updated at {datetime.datetime.utcnow().strftime("%Y-%m-%d, %H:%M")} UTC\n',)
         await channel.send(embed=em)
         
-    elif city not in stations_images:
-        await interaction.response.send_message(f"{city} doesn't have image set, please set image for the city and try again. If problem keeps appearing please contact Hituh", ephemeral=True, delete_after=5)         
     #Displays empty city embed
     elif city not in stations_list:
         embedColor = _set_embed_colour(city)
@@ -176,24 +270,18 @@ async def owner_stations(
     interaction: nextcord.Interaction, 
     owner: Optional[str] = SlashOption(description="Ping or the owner server name, if empty will display your stations")):
     print(f'{interaction.user} has used owner_stations in {interaction.channel} at {datetime.datetime.utcnow().strftime("%Y-%m-%d, %H:%M")} UTC\nInteraction message : {interaction.data}')
-
-    if owner == None:
-        owner_id = _get_user_id(interaction.user.name)
-    else:
-        owner_id = _get_user_id(owner)
-    owner_list = f'Stations list for {owner}\n```'
-    stations = False
+  
+    owner_id = _get_user_id(owner or interaction.user.name)
+    stations = []
     for city in stations_list.keys():
-        for station in stations_list[city].keys():
-            for owner in stations_list[city][station]:
-                if str(owner) == str(owner_id):
-                    stations = True
-                    owner_list += f'{city} -> {station}\n'
-        owner_list += '\n'
+        owner_stations = [f'{city} -> {station}\n' for station in stations_list[city] for owner in stations_list[city][station] if str(owner) == str(owner_id)]
+        if owner_stations:
+            stations.append(f'**{city.title()}**\n```{"".join(owner_stations)}```\n')
     if stations:
-        await interaction.response.send_message(f"{owner_list}```", ephemeral=True, delete_after=30)         
+        owner_header = f'Stations list for <@{owner_id}>\n'
+        await interaction.response.send_message(owner_header + "".join(stations), ephemeral=True, delete_after=30)
     else:
-        await interaction.response.send_message(f'No stations found for <@{owner_id}>', delete_after=30)    
+        await interaction.response.send_message(f"No stations found for <@{owner_id}> in any city.", ephemeral=True, delete_after=30)
 
 #Add station to provided owner. If not owner provided defaults to interaction.user
 @bot.slash_command(description='Adds a station to the list of stations.', guild_ids=[int(os.getenv('TESTSERVER_ID'))], default_member_permissions=8)
@@ -226,19 +314,18 @@ async def add_station(
     owner: Optional[str] = SlashOption(description="Ping the owner, if empty will add to your stations")):
     print(f'{interaction.user} has used add_station in {interaction.channel} at {datetime.datetime.utcnow().strftime("%Y-%m-%d, %H:%M")} UTC\nInteraction message : {interaction.data}')
     
-    if owner == None:
-        owner_id = _get_user_id(interaction.user.name)
-    else:
-        owner_id = _get_user_id(owner)
-        
-    if (str(city), str(station), int(owner_id)) not in database.get_data('stations', columns='DISTINCT city, station_name, owner_id'):
+    owner_id = _get_user_id(owner) if owner else _get_user_id(interaction.user.name)
+    city_title = city.title()
+    station_title = station.title()
+    
+    if (city, station, owner_id) not in database.get_data('stations', columns='DISTINCT city, station_name, owner_id'):
         database.insert_data('stations', city=city, station_name=station, owner_id=owner_id)
         _update_stations_list()
-        await interaction.response.send_message(f"{station.title()} added for <@{owner_id}> at {city.title()}", ephemeral=True, delete_after=30)         
+        await interaction.response.send_message(f"{station_title} added for <@{owner_id}> at {city_title}", ephemeral=True, delete_after=30)
     else:
-        await interaction.response.send_message(f'{station.title()} is already added for <@{owner_id}> at {city.title()}.', ephemeral=True, delete_after=30)
+        await interaction.response.send_message(f'{station_title} is already added for <@{owner_id}> at {city_title}.', ephemeral=True, delete_after=30).user
 
-#Add station to interaction.user
+#Adds co-owner to all stations of selected owner
 @bot.slash_command(description='Adds co-owners to your stations.', guild_ids=[int(os.getenv('TESTSERVER_ID'))], default_member_permissions=8)
 async def add_coowner(
     interaction: nextcord.Interaction, 
@@ -318,10 +405,7 @@ async def delete_station(
     owner: Optional[str] = SlashOption(description="Ping the owner, if empty will remove your station")): 
     print(f'{interaction.user} has used delete_station in {interaction.channel} at {datetime.datetime.utcnow().strftime("%Y-%m-%d, %H:%M")} UTC\nInteraction message : {interaction.data}')
  
-    if owner == None:
-        owner_id = _get_user_id(interaction.user.name)
-    else:
-        owner_id = _get_user_id(owner)
+    owner_id = _get_user_id(interaction.user.name) if owner is None else _get_user_id(owner)
         
     if (str(city), str(station), int(owner_id)) in database.get_data('stations', columns='DISTINCT city, station_name, owner_id'):
         database.delete_data('stations', where=f'WHERE city = "{city}" AND station_name = "{station}" and owner_id = {owner_id}')
@@ -357,123 +441,96 @@ async def set_image(
 @bot.slash_command(description="Request for associate", guild_ids=[int(os.getenv('TESTSERVER_ID'))])
 async def request(
         interaction: nextcord.Interaction, 
-        nickname: str = SlashOption(description="Your in-game nickname. After writing your name press TAB to see other options."),
-        guildname: Optional[str] = SlashOption(description="If you're requesting for a guild, please write your full guild name."),
-        alliancename: Optional[str] = SlashOption(description="If you're requesting for an alliance, please write your full alliance name."),
-        alchemist: Optional[str] = SlashOption(description="Select this option and then select 'Yes I want this station' to add Alchemist's Lab to your request."),
-        butcher: Optional[str] = SlashOption(description="Select this option and then select 'Yes I want this station' to add Butcher to your request.", choices={'Yes I want this station'}),
-        cook: Optional[str] = SlashOption(description="Select this option and then select 'Yes I want this station' to add Cook to your request.", choices={'Yes I want this station'}),
-        hunter: Optional[str] = SlashOption(description="Select this option and then select 'Yes I want this station' to add Hunter's Lodge to your request.", choices={'Yes I want this station'}),
-        lumbermill: Optional[str] = SlashOption(description="Select this option and then select 'Yes I want this station' to add Lumbermill to your request.", choices={'Yes I want this station'}),
-        mage: Optional[str] = SlashOption(description="Select this option and then select 'Yes I want this station' to add Mage's Tower to your request.", choices={'Yes I want this station'}),
-        mill: Optional[str] = SlashOption(description="Select this option and then select 'Yes I want this station' to add Mill to your request.", choices={'Yes I want this station'}),
-        saddler: Optional[str] = SlashOption(description="Select this option and then select 'Yes I want this station' to add Saddler to your request.", choices={'Yes I want this station'}),
-        smelter: Optional[str] = SlashOption(description="Select this option and then select 'Yes I want this station' to add Smelter to your request.", choices={'Yes I want this station'}),
-        stonemason: Optional[str] = SlashOption(description="Select this option and then select 'Yes I want this station' to add Stonemason to your request.", choices={'Yes I want this station'}),
-        tanner: Optional[str] = SlashOption(description="Select this option and then select 'Yes I want this station' to add Tanner to your request.", choices={'Yes I want this station'}),
-        toolmaker: Optional[str] = SlashOption(description="Select this option and then select 'Yes I want this station' to add Toolmaker to your request.", choices={'Yes I want this station'}),
-        warrior: Optional[str] = SlashOption(description="Select this option and then select 'Yes I want this station' to add Warrior's Forge to your request.", choices={'Yes I want this station'}),
-        weaver: Optional[str] = SlashOption(description="Select this option and then select 'Yes I want this station' to add Weaver to your request.", choices={'Yes I want this station'}),      
-        ):
+        type: str = SlashOption(description="Type of your request. Select accordingly.", choices={
+            'Personal': 'solo',
+            'Guild': 'guild',
+            'Alliance': 'alliance'} 
+        ),
+        name: str = SlashOption(description="Write full name of you character/guild/alliance accordingly to your previous choice."),
+       ):
     print(f'{interaction.user} has used request in {interaction.channel} at {datetime.datetime.utcnow().strftime("%Y-%m-%d, %H:%M")} UTC\nInteraction message : {interaction.data}')
     channel = interaction.channel.id
+    city = _get_city_by_id(channel)
+
+    # Get city from interaction channel
+    city = _get_city_by_id(interaction.channel.id)
+
+    # Check if command is being used in correct channel
+    if str(interaction.channel.id) not in request_channels:
+        await interaction.response.send_message(f"You shouldn't use that command here. Please use it in your city of choice: {' '.join([f'<#{channel}> ' for channel in request_channels])}", ephemeral=True, delete_after=30)
+        return
+    name_check = id_scrapper(name)
+    print(name_check)
+    if type != 'alliance' and not name_check:
+        if type == 'solo':
+            await interaction.response.send_message(f"Couldn't find user with name {name}. Are you sure you wrote your in-game name correctly?", ephemeral=True, delete_after=30)
+        if type == 'guild':
+            await interaction.response.send_message(f"Couldn't find guild with name {name}. Are you sure you wrote your guild name correctly?", ephemeral=True, delete_after=30)
+        return
     
-    #Finding if user has already made thread
-    threads_in_channel = interaction.channel.threads
-    thread_found = None
-    for thread in threads_in_channel:
-        if interaction.user.name in thread.name and thread.archived == False:
-            thread_found = thread
-    
-    #Correct channel check        
-    if(str(channel) not in request_channels):
-        r_channels = ''
-        for channel in request_channels:
-            r_channels += f"<#{channel}> "
-        await interaction.response.send_message(f"You shouldn't use that command here. Please use it in your city of choice in {r_channels}", ephemeral=True, delete_after=30)
-    
-    else:
-        #Creating request array
-        requests = []
-        city = _get_city_by_id(channel)
-        if(alchemist != None): requests.append('alchemy')
-        if(butcher != None): requests.append('butcher')
-        if(cook != None): requests.append('cook')
-        if(hunter != None): requests.append('hunter')
-        if(lumbermill != None): requests.append('lumbermill')
-        if(mage != None): requests.append('mage')
-        if(mill != None): requests.append('mill')
-        if(saddler != None): requests.append('saddler')
-        if(smelter != None): requests.append('smelter')
-        if(stonemason != None): requests.append('stonemason')
-        if(tanner != None): requests.append('tanner')
-        if(toolmaker != None): requests.append('toolmaker')
-        if(warrior != None): requests.append('warrior')
-        if(weaver != None): requests.append('weaver')
+    # Check if city has available stations
+    if city not in stations_list:
+        await interaction.response.send_message(f"This city doesn't have any stations available. Please wait for updates.", ephemeral=True, delete_after=30)
+        return
+
+    # Check for existing threads by user
+    for thread in interaction.channel.threads:
+        if name in thread.name[:-8] and type in thread.name[len(name):-8] and type == 'guild' or type == 'alliance':
+            await interaction.response.send_message(f"*Looks like there is already thread for {type} {name} - <#{thread.id}>*", ephemeral=True, delete_after=15)
+            await thread.send(f"Adding <@{interaction.user.id}> to the thread to avoid duplicates. If there is anything wrong please let us know")
+            return
+        if name in thread.name[:-8] and type in thread.name[len(name):-8]:
+            await interaction.response.send_message(f"*You already have an open thread - <#{thread.id}>*", ephemeral=True, delete_after=15)
+            return
+  
         
-        #Requested station availability check
-        request_string = ''
-        are_stations_available = True
-        stations_not_avaiable = ''
-        for request in requests:
-            if(str(request) not in stations_list[city]):
-                are_stations_available = False
-                stations_not_avaiable += f'{request.title()} '
-            request_string += f'{request.title()} '
-        if not requests:
-            await interaction.response.send_message(f"You need to select at least one station.", ephemeral=True, delete_after=30) 
-        elif(requests and are_stations_available == False):
-            await interaction.response.send_message(f"{stations_not_avaiable}are currently not avaiable in {city.title()}. Please check the list of avaiable stations in the city and try again.", ephemeral=True, delete_after=30) 
-        
-        #Request is proper
-        elif(requests and are_stations_available == True):
-            #Creating new thread or adding new embed to already existing thread made by interaction user
-            if thread_found == None:
-                await interaction.response.send_message(f"You are requesting {request_string}in {city.title()}, private thread will be opened shortly.", ephemeral=True, delete_after=30)
-                thread = await interaction.channel.create_thread(name=f'{interaction.user.name} request', message=None, auto_archive_duration=60, type=None)
-            else: 
-                await interaction.response.send_message(f"This request has been added to your current one. Here is your thread <#{thread.id}> ", ephemeral=True, delete_after=60)
-                thread = thread_found
-                
-            #Adding to thread
-            await thread.add_user(interaction.user)
-            guild = bot.get_guild(int(os.getenv('TESTSERVER_ID')))
-            owner_ids = []
-            for request in requests:
-                if(city in stations_list and request in stations_list[city] and stations_list[city][request] not in owner_ids):
-                    for owner in stations_list[city][request]:
-                        owner_ids.append(owner)
-                        if city in stations_coowners_list and request in stations_coowners_list[city] and owner in stations_coowners_list[city][request]:
-                            for coowner in stations_coowners_list[city][request][owner]:
-                                if coowner not in owner_ids:
-                                    owner_ids.append(coowner) 
-            for id in owner_ids:
-                try:
-                    member = guild.get_member(id)
-                    await thread.add_user(member)
-                except: 
-                    await thread.send(f"I couldn't find <@{id}> in the server. If this not intentional, please contant <@158643072886898688>")
-                    
-            #Embed creation
-            embedColor = _set_embed_colour(city)
-            description = f"Associate request in **{city}**. Stations:\n"
-            description = f"\nStations:\n"
-            for request in requests:
-                description += f"{request.title()}\n"
-            em = nextcord.Embed(
-                    description=description,
-                    color=embedColor)
-            for request in requests:
-                description += f"{request.title()}\n"
-            if(alliancename == None and guildname == None):
-                em.set_author(name=f'Request made by {interaction.user.name} for player {nickname}', icon_url=f'{interaction.user.avatar}')
-            if(alliancename == None and guildname != None):
-                em.set_author(name=f'Request made by {interaction.user.name} for guild {guildname}', icon_url=f'{interaction.user.avatar}')
-            if(alliancename != None):
-                em.set_author(name=f'Request made by {interaction.user.name} for alliance {alliancename}', icon_url=f'{interaction.user.avatar}')
-            em.set_footer(text=f'Request made at: {datetime.datetime.utcnow().strftime("%Y-%m-%d, %H:%M")} UTC\n',)
-            await thread.send(embed=em)
-   
+    # Create new thread and send confirmation message
+    thread = await interaction.channel.create_thread(name=f"{name} {type} request", message=None, auto_archive_duration=60, type=None)
+    await interaction.response.send_message(f"*Here is your request - <#{thread.id}>.\nUntil you submit your request the thread will be closed after 60 minutes of inactivity.*", ephemeral=True, delete_after=15)
+    await thread.add_user(interaction.user)
+
+    # Create and send shop information embed
+    guild = bot.get_guild(int(os.getenv('TESTSERVER_ID')))
+    emojis = await guild.fetch_emojis()
+
+    # Create the description for the embed
+    description = f"**Available shops in {city.title()}**\n"
+    avaiable_stations = 0
+    for station in stations_list[city]:
+        # Count the available stations
+        avaiable_stations += 1
+
+        # Add the emoji for the station
+        for emoji in emojis:
+            if str(emoji)[2:-21] == str(station):
+                description += f"\n**{emoji} {station.title()}**"
+
+        # Add the owner and co-owners for the station
+        for owner in stations_list[city][station]:
+            description += f"\nOwner - <@{str(owner)}>"
+            if city in stations_coowners_list and station in stations_coowners_list[city] and owner in stations_coowners_list[city][station]:
+                description += " Co-owners -" + ''.join([f" <@{str(coowner)}>" for coowner in stations_coowners_list[city][station][owner]])
+
+    # Add additional information to the description
+    description += "\nTo succesfully create a request, select stations using emojis below and pressing 'Confirm'\nTo cancel your request, press 'Cancel'. It will close the thread.\n**Use brain while requesting. All unreasonable requests will be ignored.**\n*If by any chance button are not responding, please contact <@158643072886898688> for help.*"
+
+    # Create the embed and add the footer
+    stations_embed = discord.Embed(title="Shop Information", description=description)
+    if city in stations_images:
+        stations_embed.set_image(stations_images[city.lower()])
+    stations_embed.set_footer(text=f'Thread opened at {datetime.datetime.utcnow().strftime("%Y-%m-%d, %H:%M")} UTC\n',)
+
+    # Create the request button and add it to the embed
+    button_request = ButtonRequest(request_type=type, city=city, name=name, avaiable_stations=avaiable_stations)
+    await thread.send(embed=stations_embed, view=button_request)
+
+    # Add the reactions for the available stations
+    embed = await thread.history(limit=1).flatten()
+    button_request.message = embed[0]
+    for emoji in emojis:
+        if str(emoji)[2:-21] in stations_list[city]:
+            await embed[0].add_reaction(emoji)
+    
 #Mass delete messages
 @bot.slash_command(description="Deletes given amount of messages from current channel.", guild_ids=[int(os.getenv('TESTSERVER_ID'))], default_member_permissions=8)  
 async def delete_messages(
@@ -484,45 +541,49 @@ async def delete_messages(
         await interaction.response.send_message(f"Amount needs to be less than 100", ephemeral=True, delete_after=5) 
     else:
         await interaction.channel.purge(limit = amount)
-        await interaction.response.send_message(f"Done deleting {amount} messages", ephemeral=True, delete_after=5) 
+        await interaction.response.send_message(f"Done deleting {amount} messages", ephemeral=True, delete_after=5)    
+               
+# Sends finish message to all threads older than given amount
+@bot.slash_command(description="Sends close button and done message to all threads older than given amount in the channel.", guild_ids=[int(os.getenv('TESTSERVER_ID'))], default_member_permissions=8)
+async def set_done(
+    interaction: nextcord.Interaction,
+    amount: int = SlashOption(description="Threads age in seconds.")): 
 
-#Replies to all active threads in channel. To be improved to include close button and 24h auto-archive timer
-@bot.slash_command(description="Replies to all threads in the city.", guild_ids=[int(os.getenv('TESTSERVER_ID'))], default_member_permissions=8)  
-async def reply_to_threads(
-    interaction: nextcord.Interaction, 
-    message: str = SlashOption()):
-    threads_in_channel = interaction.channel.threads
-    for thread in threads_in_channel:
-        await thread.send(f"{message}")
-    
-#Archives threads older than given amount of seconds
-@bot.slash_command(description="Archives all threads older than given amount of seconds.", guild_ids=[int(os.getenv('TESTSERVER_ID'))], default_member_permissions=8)  
-async def archive_done_threads(
-    interaction: nextcord.Interaction, 
-    amount: int = SlashOption(description="Threads age in seconds.")):  
-    print(f'{interaction.user} has used archive_done_threads in {interaction.channel} at {datetime.datetime.utcnow().strftime("%Y-%m-%d, %H:%M")} UTC\nInteraction message : {interaction.data}')
-    threads_in_channel = interaction.channel.threads
+    print(f'{interaction.user} has used set_done in {interaction.channel} at {datetime.datetime.utcnow().strftime("%Y-%m-%d, %H:%M")} UTC\nInteraction message : {interaction.data}')
+
     counter = 0
-    for thread in threads_in_channel:
+
+    # Get the list of threads in the channel or its parent, depending on whether the channel is a private thread or not
+    threads_list = interaction.channel.parent.threads if str(interaction.channel.type) == 'private_thread' else interaction.channel.threads
+
+    
+    # Loop through the threads and check if they are older than the given amount
+    for thread in threads_list:
         diff = int(((datetime.datetime.utcnow().replace(tzinfo=pytz.utc)) - (thread.created_at - datetime.timedelta(seconds=0))).total_seconds())
-        if diff > amount and thread.archived == False:
-            await thread.edit(archived = True)
-            counter += 1
+        if diff > amount and not thread.archived:
+            # Set the thread's auto-archive duration to 24 hours
+            await thread.edit(auto_archive_duration=1440)
+
+            # Send a finish message to the thread's owner
+            first_message = await thread.history(oldest_first = True, limit=1).flatten()
+            button = ButtonFinish()      
+            await thread.send(f"<@{first_message[0].mentions[0].id}> your request have been fulfilled. Press the button below to close the thread or the owners that there's something missing.\nThread will automatically close after 24 hours.", view=button)
+            
+            # Set the button's message ID to the ID of the message that was just sent
+            button_id = await thread.history(limit=1).flatten()
+            button.message = button_id[0]
+            counter += 1             
+
+    # Send a response message indicating the number of threads that were finished, or that none were found
     if counter != 0:
-        await interaction.response.send_message(f"Done archiving {counter} threads older than {amount} seconds from current channel.", ephemeral=True, delete_after=5)
+        await interaction.response.send_message(f"Sent finished message to {counter} threads older than {amount} seconds.", ephemeral=True, delete_after=5)
     else:
         await interaction.response.send_message(f"Didn't find any threads older than {amount} seconds.", ephemeral=True, delete_after=5)
-        
-@bot.slash_command(description="Sends close button and done message to all threads in the channel.", guild_ids=[int(os.getenv('TESTSERVER_ID'))], default_member_permissions=8)
-async def send_done(
-    interaction: nextcord.Interaction):
-    if str(interaction.channel.type) == 'private_thread':
-        channel = interaction.channel.parent
-    else:
-        channel = interaction.channel
-    threads_list = channel.threads
-    for thread in threads_list:
-        await thread.send(f"Your request have been fulfilled. Press the button below to close the thread. If you think something's missing let us know")
+
+@bot.slash_command(description="Command for testing.", guild_ids=[int(os.getenv('TESTSERVER_ID'))], default_member_permissions=8)
+async def test_command(interaction: nextcord.Interaction):
+    await interaction.response.send_message(f"Tested", ephemeral=True, delete_after=10)
+
 
 if __name__ == '__main__':
 
@@ -530,10 +591,14 @@ if __name__ == '__main__':
     database.create_table('stations_coowners', [('city', 'TEXT'), ('station_name', 'TEXT'), ('owner_id', 'INTEGER'), ('coowner_id', 'INTEGER')])
     database.create_table('stations', [('city', 'TEXT'), ('station_name', 'TEXT'), ('owner_id', 'INTEGER')])
     database.create_table('images', [('city', 'TEXT UNIQUE'), ('image_link', 'TEXT')])
-
+    
+    
     _update_stations_list()
     _update_stations_images()
     _update_stations_coowners_list()
-
-            
+       
     bot.run(os.getenv('BOT_TOKEN'))
+    
+
+    
+    
