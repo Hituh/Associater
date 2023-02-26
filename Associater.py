@@ -10,7 +10,7 @@ from nextcord.ext import commands
 from scrapper.id_scrapper import id_scrapper
 import pytz
 
-from aux_libraries import database
+from database import database
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -102,7 +102,6 @@ class ButtonRequest(nextcord.ui.View):
         print(f"{interaction.user} has closed the thread {interaction.channel}")
         await interaction.channel.delete()
 
-        
 class ButtonFinish(nextcord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -596,7 +595,7 @@ if __name__ == '__main__':
     _update_stations_list()
     _update_stations_images()
     _update_stations_coowners_list()
-       
+
     bot.run(os.getenv('BOT_TOKEN'))
     
 
