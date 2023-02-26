@@ -2,17 +2,16 @@ import os
 import nextcord
 import discord
 import datetime
+import threading
+import asyncio
 
 
-# from cogs.bgtasks import TaskCog
-# # from cogs.buttons import ButtonCog
+from cogs.bgtasks import TaskCog
 from typing import Optional
 from nextcord import Interaction, SlashOption, Colour
 from nextcord.ext import commands
-from cogs.bgtasks import TaskCog
 from scrapper.id_scrapper import id_scrapper
 import pytz
-from cogs.buttons import ButtonCog
 
 from database import database
 
@@ -25,10 +24,10 @@ bot = commands.Bot(intents=intents)
 
 @bot.event
 async def on_ready():
+    bot.add_cog(TaskCog(bot))
     global emojis_array
     guild = bot.get_guild(int(os.getenv('TESTSERVER_ID')))
     emojis_array = await guild.fetch_emojis()
-    
     print(f'        {bot.user} has connected to Discord!\n        Currently it is connected to the following servers:')
     for guild in bot.guilds:
         print('       ',guild)
@@ -42,6 +41,104 @@ stations_coowners_list = {}
 emojis_array = []
 
 request_channels = ['1076824842155860059', '1076824842155860060', '1076824842155860061', '1076824842155860062', '1076824842155860063', '1076824842155860064']
+
+
+class ButtonRequest(nextcord.ui.View):
+    def __init__(self, request_type, city, name, avaiable_stations):
+        super().__init__(timeout=None)
+        self.value = None
+        self.message = None 
+        self.city = city
+        self.request_type = request_type
+        self.name = name
+        self.avaiable_stations = avaiable_stations
+         
+    @nextcord.ui.button(label="Confirm", style=nextcord.ButtonStyle.green)
+    async def finish(self, button: nextcord.ui.Button, interaction: Interaction):
+        reactions = interaction.message.reactions
+        stations_to_add = []
+        owners_list = []
+        request_items_message = ""
+
+        # loop through each reaction and get the station name if it has more than one reaction
+        for reaction in reactions:
+            if reaction.count > 1:
+                stations_to_add.append(str(reaction)[2:-21])
+                request_items_message += f"\n{str(reaction)[2:-21].title()}"
+
+        # loop through the selected stations and get their owners
+        for request in stations_to_add:
+            if request in stations_list[self.city]:
+                for owner in stations_list[self.city][request]:
+                    if owner not in owners_list:
+                        owners_list.append(owner)
+
+                        # add co-owners to the owners list
+                        if self.city in stations_coowners_list and request in stations_coowners_list[self.city] and owner in stations_coowners_list[self.city][request]:
+                            for coowner in stations_coowners_list[self.city][request][owner]:
+                                if coowner not in owners_list:
+                                    owners_list.append(coowner)
+        
+        # if no stations were selected, send a message indicating so
+        if not stations_to_add:
+            await interaction.response.send_message("```If it wasn't obvious you need to choose at least one station you'd like to request.```", ephemeral=True, delete_after=30)
+
+        # if stations were selected, send a message to the owners list with the request
+        else:
+            owners_message = ' '.join([f"<@{owner}>" for owner in owners_list])
+            await interaction.channel.send(f"{owners_message} here is <@{interaction.user.id}> **{self.request_type}** request for **{self.name}**")
+
+            embed = discord.Embed(title="Stations list", description=f"{request_items_message}")
+            await interaction.channel.send(embed=embed)
+            # handle solo requests
+            if str(self.request_type) == 'solo' and len(stations_to_add) == self.avaiable_stations and len(stations_to_add) > 3:
+                await interaction.channel.send(f"<@{interaction.user.id}> despite us asking to be mindful, you still requested all possible stations for a solo user. \nPlease provide explanation to why you would need access to all these stations.")
+                
+            # handle guild requests
+            if str(self.request_type) == 'guild':
+                embed = discord.Embed(description=f"Please send screenshot of your guild looking like this:")
+                embed.set_image("https://cdn.discordapp.com/attachments/841398443885068309/1079124508142731264/image.png")
+                await interaction.channel.send(embed=embed)
+            # handle alliance requests
+            if str(self.request_type) == 'alliance':
+                embed = discord.Embed(description=f"Please send screenshot of your alliance looking like this:")
+                embed.set_image("https://cdn.discordapp.com/attachments/841398443885068309/1079124554254925844/image.png")
+                await interaction.channel.send(embed=embed)
+                
+            await self.message.delete()
+    @nextcord.ui.button(label="Cancel", style=nextcord.ButtonStyle.red)
+    async def cancel(self, button: nextcord.ui.Button, interaction: Interaction):
+        print(f"{interaction.user} has closed the thread {interaction.channel}")
+        await interaction.channel.delete()
+
+class ButtonFinish(nextcord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+        self.message = None
+    
+    @nextcord.ui.button(label="Finish", style=nextcord.ButtonStyle.green)
+    async def finish(self, button: nextcord.ui.Button, interaction: Interaction):
+        try:
+            await self.message.delete()
+            await interaction.channel.send(f"```Request closed by {interaction.user}```")
+            await interaction.channel.edit(archived=True)
+        except:
+            print("Button has been already used")
+
+
+def _delete_archived_threads():
+    # This function runs periodically every 1 second
+    threading.Timer(1, _delete_archived_threads).start()
+
+    now = datetime.datetime.now()
+
+    current_time = now.strftime("%H:%M:%S")
+    print("Current Time =", current_time)
+
+    if(current_time == '02:11:00'):  # check if matches with the desired time
+        print('sending message')
+    for thread in threading.enumerate(): 
+        print(thread.name)
 
 #Returns city string based on interaction.channel.id
 def _get_city_by_id(channel_id):
@@ -83,7 +180,6 @@ def _update_stations_list():
         if station_name not in stations_list[city].keys():
             stations_list[city][station_name] = []
         stations_list[city][station_name].append(owner_id)
-    buttonCog.parsed = False
     
 #Updates in-code station co-owners array
 def _update_stations_coowners_list():
@@ -102,8 +198,7 @@ def _update_stations_coowners_list():
         if owner_id not in stations_coowners_list[city][station_name].keys():
              stations_coowners_list[city][station_name][owner_id] = []
         stations_coowners_list[city][station_name][owner_id].append(coowner_id) 
-    buttonCog.parsed = False
-    
+  
 #Updates station image in database      
 def _update_stations_images():
     global stations_images
@@ -113,8 +208,7 @@ def _update_stations_images():
         city = image[0]
         image_link = image[1]
         stations_images[city] = image_link
-    buttonCog.parsed = False
-    
+  
 #Returns user id. Takes user class or user name as input.
 def _get_user_id(value):
     guild = bot.get_guild(int(os.getenv('TESTSERVER_ID')))
@@ -428,14 +522,14 @@ async def request(
     if city in stations_images:
         stations_embed.set_image(stations_images[city.lower()])
     stations_embed.set_footer(text=f'Thread opened at {datetime.datetime.utcnow().strftime("%Y-%m-%d, %H:%M")} UTC\n',)
-    
+
     # Create the request button and add it to the embed
-    # button_request = await ButtonCog.create_view(bot)
-    # await thread.send(embed=stations_embed, view=button_request)
+    button_request = ButtonRequest(request_type=type, city=city, name=name, avaiable_stations=avaiable_stations)
+    await thread.send(embed=stations_embed, view=button_request)
 
     # Add the reactions for the available stations
     embed = await thread.history(limit=1).flatten()
-    # button_request.message = embed[0]
+    button_request.message = embed[0]
     for emoji in emojis_array:
         if str(emoji)[2:-21] in stations_list[city]:
             try:   
@@ -478,12 +572,12 @@ async def set_all_done(
 
             # Send a finish message to the thread's owner
             first_message = await thread.history(oldest_first = True, limit=1).flatten()
-            # button = ButtonCog.ButtonFinish()      
-            # await thread.send(f"<@{first_message[0].mentions[0].id}> your request have been fulfilled.\nIf something's missing ping owners.\nIf everything is correct press the button below to close the thread.\nThread will automatically close after 24 hours.", view=button)
+            button = ButtonFinish()      
+            await thread.send(f"<@{first_message[0].mentions[0].id}> your request have been fulfilled.\nIf something's missing ping owners.\nIf everything is correct press the button below to close the thread.\nThread will automatically close after 24 hours.", view=button)
             
             # Set the button's message ID to the ID of the message that was just sent
             button_id = await thread.history(limit=1).flatten()
-            # button.message = button_id[0]
+            button.message = button_id[0]
             counter += 1             
 
     # Send a response message indicating the number of threads that were finished, or that none were found
@@ -494,8 +588,8 @@ async def set_all_done(
 
 @bot.slash_command(description="Command for testing.", guild_ids=[int(os.getenv('TESTSERVER_ID'))], default_member_permissions=8)
 async def test_command(interaction: nextcord.Interaction):
-    buttonCog.parsed = False
-        
+    await interaction.response.send_message(f"Tested", ephemeral=True, delete_after=10)
+    
 if __name__ == '__main__':
 
     database.connect('stations.db')
@@ -503,14 +597,11 @@ if __name__ == '__main__':
     database.create_table('stations', [('city', 'TEXT'), ('station_name', 'TEXT'), ('owner_id', 'INTEGER')])
     database.create_table('images', [('city', 'TEXT UNIQUE'), ('image_link', 'TEXT')])
     
-    taskCog = TaskCog(bot)
-    buttonCog = ButtonCog(bot)
-    bot.add_cog(buttonCog)
-    bot.add_cog(taskCog)
     
     _update_stations_list()
     _update_stations_images()
     _update_stations_coowners_list()
+
     
     bot.run(os.getenv('BOT_TOKEN'))
     

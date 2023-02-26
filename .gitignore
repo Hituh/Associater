@@ -1,3 +1,5 @@
 .env
 database/__pycache__
 scrapper/__pycache__
+cogs/__pycache__
+Associater.code-workspace

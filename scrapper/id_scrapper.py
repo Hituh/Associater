@@ -10,7 +10,6 @@ def id_scrapper(name, _type='any'):
 
     base_url = 'https://gameinfo.albiononline.com/api/gameinfo/search?q='
 
-    print('Requesting Id for {}'.format(name))
     max_tries = 6
     status_code = 0
     for _try in range(max_tries):
@@ -39,8 +38,9 @@ def id_scrapper(name, _type='any'):
     for _type in list(_types)[::-1]:
         for entrance in data[_type]:
             if entrance['Name'].lower() == name.lower():
-                print('Id for {} ({}) adquired sucessfully'.format(name, entrance['Id']))
-                found_matches.append({'Id': entrance['Id'], 'Type': _type[:-1]})
+                print(f'Found. Name - {name} Type - {_type[:-1]}')
+                found_matches.append(
+                    {'Id': entrance['Id'], 'Type': _type[:-1]})
 
     if found_matches:
         return found_matches
