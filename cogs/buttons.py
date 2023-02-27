@@ -19,8 +19,8 @@ import nextcord
 
 from scrapper.id_scrapper import id_scrapper
 
-from dotenv import load_dotenv
-load_dotenv()
+from dotenv import load_dotenv, find_dotenv
+load_dotenv(find_dotenv())
 from database import database
 
 from nextcord.ext import commands, tasks
@@ -205,8 +205,8 @@ class ButtonCog(commands.Cog):
             self.parsed = True
 
     # Command for users to request a station
-    @nextcord.slash_command(description="Request for associate", guild_ids=[1076824840687853578])
-    async def request_test(
+    @nextcord.slash_command(description="Request for associate", guild_ids=[int(os.getenv('TESTSERVER_ID'))])
+    async def request(
         self,
         interaction: nextcord.Interaction,
         type: str = SlashOption(description="Type of your request. Select accordingly.", choices={
@@ -298,7 +298,7 @@ class ButtonCog(commands.Cog):
                     print(
                         "Error adding reaction. Probably the embed has beed already deleted.")
 
-    @nextcord.slash_command(description="Command for testing.", guild_ids=[int(1076824840687853578)], default_member_permissions=8)
+    @nextcord.slash_command(description="Command for testing.", guild_ids=[int(os.getenv('TESTSERVER_ID'))], default_member_permissions=8)
     async def help_menu(self, interaction: nextcord.Interaction):
         await interaction.channel.send(
             content="**:white_check_mark: If you've read the guidelines above, click a button to create a help thread!**",
