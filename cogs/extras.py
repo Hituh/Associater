@@ -6,7 +6,9 @@ import re
 
 import os
 from dotenv import load_dotenv, find_dotenv
+
 load_dotenv(find_dotenv())
+SERVER_ID = int(os.getenv('TESTSERVER_ID'))
 
 class ExtrasCog(commands.Cog):
     def __init__(self, bot):
@@ -15,18 +17,32 @@ class ExtrasCog(commands.Cog):
         self.guild = None
         self.update_members.start()
     
-    
     @tasks.loop(seconds=60)
     async def update_members(self):
         await self.bot.wait_until_ready()
-        self.guild = self.bot.get_guild(int(os.getenv('TESTSERVER_ID')))
+        self.guild = self.bot.get_guild(SERVER_ID)
         self.members_list = self.guild.members
     
     async def _get_members_by_id(self, value):
         ids_list = re.findall(r'\b\d{18}\b', re.sub(r'[<@>}]', '', value))
         return [self.guild.get_member(int(id)) for id in ids_list]
-      
-    @nextcord.slash_command(description="Mutes selected members", guild_ids=[int(os.getenv('TESTSERVER_ID'))], default_member_permissions=8)
+    
+    # Takes amount of minutes and returns formatted string
+    def format_duration(self, minutes):
+        if minutes == 1:
+            return "1 minute"
+        if minutes == 5:
+            return "5 minutes"
+        if minutes == 10:
+            return "10 minutes"
+        if minutes == 60:
+            return "1 hour"
+        if minutes == 1440:
+            return "1 day"
+        if minutes == 10080:
+            return "1 week"
+
+    @nextcord.slash_command(description="Mutes selected members", guild_ids=[SERVER_ID], default_member_permissions=8)
     async def custom_timeout(
         self,
         interaction: nextcord.Interaction,
@@ -43,15 +59,21 @@ class ExtrasCog(commands.Cog):
     ):
         await self.bot.wait_until_ready()
         m_list = await self._get_members_by_id(users)
+        
+        mutes_message, response_message = ''
         for member in m_list:
             try:
                 await member.edit(reason=reason, timeout=datetime.timedelta(minutes=duration))
+                response_message +=f'{member.mention} has been timed out.\n'
+                mutes_message +=f'{member.mention}, '
             except:
-                print(f"Couldn't timeout {member.name}. Probably member is administrator or has higer perms than the bot itself.")
-        
-    @nextcord.slash_command(description="extras cog test command")
-    async def extras_test(self, interaction : nextcord.Interaction):
-        print(self.members_list)
+                response_message += f"Couldn't timeout {member.mention}. The user is administrator or has higer perms than the bot.\n"
+                continue
+            
+        mutes_message += f"you have been timed out by {interaction.user.mention}, for {self.format_duration(duration)}. Reason: {reason}"
+        mute_channel = self.guild.get_channel(SERVER_ID)
+        await mute_channel.send(mutes_message)
+        await interaction.response.send_message(response_message, ephemeral=True, delete_after=15)
             
     
     
