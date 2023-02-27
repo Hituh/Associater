@@ -10,6 +10,7 @@ from typing import Optional
 from nextcord import Interaction, SlashOption, Colour
 from nextcord.ext import commands
 from cogs.bgtasks import TaskCog
+from cogs.extras import ExtrasCog
 from scrapper.id_scrapper import id_scrapper
 import pytz
 from cogs.buttons import ButtonCog
@@ -505,6 +506,9 @@ if __name__ == '__main__':
     
     taskCog = TaskCog(bot)
     buttonCog = ButtonCog(bot)
+    extrasCog = ExtrasCog(bot)
+    
+    bot.add_cog(extrasCog)
     bot.add_cog(buttonCog)
     bot.add_cog(taskCog)
     
