@@ -13,8 +13,7 @@ load_dotenv(find_dotenv())
 SERVER_ID = int(os.getenv('TESTSERVER_ID'))
 
 CUSTOM_ID_PREFIX: str = 'request:'
-valid_cities = ['bridgewatch', 'caerleon',
-                'fortsterling', 'lymhurst', 'martlock', 'thetford']
+valid_cities = ['bridgewatch', 'caerleon', 'fortsterling', 'lymhurst', 'martlock', 'thetford']
 valid_stations = ['alchemy', 'butcher', 'cook', 'hunter', 'lumbermill', 'mage', 'mill', 'saddler', 'smelter', 'stonemason', 'tanner', 'toolmaker', 'warrior', 'weaver']
 request_channels = ['1076824842155860059', '1076824842155860060', '1076824842155860061', '1076824842155860062', '1076824842155860063', '1076824842155860064']
 
