@@ -35,7 +35,7 @@ def create_table(table_name, columns):
         statement = '''CREATE TABLE {}({})'''.format(table_name, columns)
         c.execute(statement)
     else:
-        print(f'table [{table_name}] already exist.')
+        print(f'Table [{table_name}] already exist.')
 
 
 def insert_data(table_name, **kargs):
