@@ -3,6 +3,7 @@ import os
 import nextcord
 
 from nextcord import Interaction, SlashOption
+import pytz
 from scrapper.id_scrapper import id_scrapper
 from database import database
 from nextcord.ext import commands, tasks
@@ -12,12 +13,22 @@ load_dotenv(find_dotenv())
 SERVER_ID = int(os.getenv('TESTSERVER_ID'))
 
 CUSTOM_ID_PREFIX: str = 'request:'
-valid_cities = ['bridgewatch', 'caerleon', 'sterling', 'lymhurst', 'martlock', 'thetford']
+valid_cities = ['bridgewatch', 'caerleon',
+                'fortsterling', 'lymhurst', 'martlock', 'thetford']
 valid_stations = ['alchemy', 'butcher', 'cook', 'hunter', 'lumbermill', 'mage', 'mill', 'saddler', 'smelter', 'stonemason', 'tanner', 'toolmaker', 'warrior', 'weaver']
 request_channels = ['1076824842155860059', '1076824842155860060', '1076824842155860061', '1076824842155860062', '1076824842155860063', '1076824842155860064']
 
 channels = {}
 
+class CloseView(nextcord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+        
+    @nextcord.ui.button(label="Finish", style=nextcord.ButtonStyle.green, custom_id="requestfinish")
+    async def cancel(self, interaction: Interaction):
+        print(f"{interaction.user} has closed the thread {interaction.channel}")
+        await interaction.channel.delete()
+    
 class RequestView(nextcord.ui.View):
     def __init__(self, stations_list, stations_coowners_list):
         super().__init__(timeout=None)
@@ -29,8 +40,8 @@ class RequestView(nextcord.ui.View):
         self.avaiable_stations = 0
         self.message = None
 
-    @nextcord.ui.button(label="Confirm", style=nextcord.ButtonStyle.green, custom_id="requestconfirm")
-    async def finish(self, button: nextcord.ui.Button, interaction: Interaction):
+    @nextcord.ui.button(label="Confirm", style=nextcord.ButtonStyle.blurple, custom_id="requestconfirm")
+    async def finish(self, interaction: Interaction):
         reactions = interaction.message.reactions
         stations_to_add = []
         owners_list = []
@@ -103,16 +114,10 @@ class RequestView(nextcord.ui.View):
             await self.message[1].delete()
             
     @nextcord.ui.button(label="Cancel", style=nextcord.ButtonStyle.red, custom_id="requestcancel")
-    async def cancel(self, button: nextcord.ui.Button, interaction: Interaction):
+    async def cancel(self, interaction: Interaction):
         print(f"{interaction.user} has closed the thread {interaction.channel}")
         await interaction.channel.delete()
         
-    @nextcord.ui.button(
-        label="CancelButton", style=nextcord.ButtonStyle.red, custom_id="persistent_view:red"
-    ) 
-    async def red(self, button: nextcord.ui.Button, interaction: nextcord.Interaction):
-        await interaction.response.send_message("This is red.", ephemeral=True)
- 
     async def interaction_check(self, interaction: Interaction):
         return True
 
@@ -120,10 +125,10 @@ class ButtonCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.parsed = False
-        self.stations_coowners_list = None
-        self.stations_list = None
-        self.stations_images = None
-        self.emojis_array = None
+        self.stations_coowners_list = {}
+        self.stations_list = {}
+        self.stations_images = {}
+        self.emojis_array = []
         self.parse_values.start()
         self.bot.loop.create_task(self._create_autorequest_list())
         self.bot.loop.create_task(self._create_views())
@@ -154,16 +159,18 @@ class ButtonCog(commands.Cog):
         await self.bot.wait_until_ready()
         guild = self.bot.get_guild(SERVER_ID)
         global channels
-        channels = {channel.name[2:channel.name.index("-")]: channel.id for channel in guild.text_channels if 'autorequest' in channel.name}
+        channels = {channel.id: channel.name[2:channel.name.index("-")] for channel in guild.text_channels if 'autorequest' in channel.name}
 
     # Creates persistent views
     async def _create_views(self):
         if getattr(self.bot, "request_view_set", False) is False:
             await self.bot.wait_until_ready()
             self.bot.request_view_set = True
-            self.bot.add_view(RequestView(self.stations_list,self.stations_coowners_list))
+            self.bot.add_view(RequestView(self.stations_list, self.stations_coowners_list))
+            self.bot.add_view(CloseView())
             print(f"Persistent views found: {self.bot.persistent_views}")
     
+    # Updates arrays and lists every 5 seconds. Used externally in Associates.py by changing parsed variable to False
     @tasks.loop(seconds=5)
     async def parse_values(self):
         if not self.parsed:
@@ -266,3 +273,37 @@ class ButtonCog(commands.Cog):
                 except:
                     print(
                         "Error adding reaction. Probably the embed has beed already deleted.")
+
+    # Sends finish message to all threads older than given amount
+    @nextcord.slash_command(description="Sends close button and done message to all threads older than given amount in the channel.", guild_ids=[SERVER_ID], default_member_permissions=8)
+    async def set_done(
+        self,
+        interaction: nextcord.Interaction,
+        amount: int = SlashOption(description="Threads age in seconds.")):
+
+        print(f'{interaction.user} has used set_done in {interaction.channel} at {datetime.datetime.utcnow().strftime("%Y-%m-%d, %H:%M")} UTC\nInteraction message : {interaction.data}')
+
+        counter = 0
+
+        # Get the list of threads in the channel or its parent, depending on whether the channel is a private thread or not
+        threads_list = interaction.channel.parent.threads if str(interaction.channel.type) == 'private_thread' else interaction.channel.threads
+
+        # Loop through the threads and check if they are older than the given amount
+        for thread in threads_list:
+            diff = int(((datetime.datetime.utcnow().replace(tzinfo=pytz.utc)) -
+                       (thread.created_at - datetime.timedelta(seconds=0))).total_seconds())
+            if diff > amount and not thread.archived and '✔ ' not in thread.name:
+                counter += 1
+                # Set the thread's auto-archive duration to 24 hours
+                await thread.edit(auto_archive_duration=1440, name='✔  ' + thread.name)
+
+                # Send a finish message to the thread's owner
+                first_message = await thread.history(oldest_first=True, limit=1).flatten()
+            
+                await thread.send(f"<@{first_message[0].mentions[0].id}> your request have been fulfilled.\nIf something's missing ping owners.\nIf everything is correct press the button below to close the thread.\nThread will automatically close after 24 hours.", view=CloseView())
+
+        # Send a response message indicating the number of threads that were finished, or that none were found
+        if counter != 0:
+            await interaction.response.send_message(f"Sent finished message to {counter} threads older than {amount} seconds.", ephemeral=True, delete_after=5)
+        else:
+            await interaction.response.send_message(f"Didn't find any unfinished threads older than {amount} seconds.", ephemeral=True, delete_after=5)
