@@ -40,15 +40,6 @@ stations_coowners_list = {}
 emojis_array = []
 request_channels = []
 
-#Returns city string based on interaction.channel.id
-def _get_city_by_id(channel_id):
-    if(str(channel_id) == "1076824842155860059"): return 'lymhurst'
-    if(str(channel_id) == "1076824842155860060"): return 'bridgewatch'
-    if(str(channel_id) == "1076824842155860061"): return 'martlock'
-    if(str(channel_id) == "1076824842155860062"): return 'thetford'
-    if(str(channel_id) == "1076824842155860063"): return 'sterling'
-    if(str(channel_id) == "1076824842155860064"): return 'caerleon'
-
 # Finding all autorequest channels in guild. Channels need to have 'autorequest' in their name
 def _get_autorequest_channels():
     global request_channels
