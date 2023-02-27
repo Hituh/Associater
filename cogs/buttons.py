@@ -1,75 +1,22 @@
-
-import asyncio
 import datetime
 import os
-from os import environ as env
-import random
-from re import match
-from discord import ChannelType, Thread
-
-from nextcord import (
-    ButtonStyle,
-    Colour,
-    Interaction,
-    ui,
-    SlashOption,
-)
-
 import nextcord
 
+from nextcord import Interaction, SlashOption
 from scrapper.id_scrapper import id_scrapper
-
-from dotenv import load_dotenv, find_dotenv
-load_dotenv(find_dotenv())
 from database import database
-
 from nextcord.ext import commands, tasks
+from dotenv import load_dotenv, find_dotenv
+
+load_dotenv(find_dotenv())
+SERVER_ID = int(os.getenv('TESTSERVER_ID'))
 
 CUSTOM_ID_PREFIX: str = 'request:'
 valid_cities = ['bridgewatch', 'caerleon', 'sterling', 'lymhurst', 'martlock', 'thetford']
 valid_stations = ['alchemy', 'butcher', 'cook', 'hunter', 'lumbermill', 'mage', 'mill', 'saddler', 'smelter', 'stonemason', 'tanner', 'toolmaker', 'warrior', 'weaver']
 request_channels = ['1076824842155860059', '1076824842155860060', '1076824842155860061', '1076824842155860062', '1076824842155860063', '1076824842155860064']
 
-# Returns city string based on interaction.channel.id
-def _get_city_by_id(channel_id):
-    if (str(channel_id) == "1076824842155860059"):
-        return 'lymhurst'
-    if (str(channel_id) == "1076824842155860060"):
-        return 'bridgewatch'
-    if (str(channel_id) == "1076824842155860061"):
-        return 'martlock'
-    if (str(channel_id) == "1076824842155860062"):
-        return 'thetford'
-    if (str(channel_id) == "1076824842155860063"):
-        return 'sterling'
-    if (str(channel_id) == "1076824842155860064"):
-        return 'caerleon'
-  
-# Updates in-code station owners array
-def _update_stations_list():
-    stations_list = {}
-    for city, station_name, owner_id in database.get_data('stations', columns='DISTINCT city, station_name, owner_id'):
-        stations_list.setdefault(city, {}).setdefault(
-            station_name, []).append(owner_id)
-    return stations_list
-
-# Updates in-code station co-owners array
-def _update_stations_coowners_list():
-    stations_coowners_list = {}
-    for city, station_name, owner_id, coowner_id in database.get_data('stations_coowners', columns='DISTINCT city, station_name, owner_id, coowner_id'):
-        stations_coowners_list.setdefault(city, {}).setdefault(
-            station_name, {}).setdefault(owner_id, []).append(coowner_id)
-    return stations_coowners_list
-
-# Updates station image in database
-def _update_stations_images():
-    return {city: image_link for city, image_link in database.get_data('images', columns='DISTINCT city, image_link')}
-
-# Updates emojis array
-async def _update_emojis(bot):
-    guild = bot.get_guild(int(os.getenv('TESTSERVER_ID')))
-    return await guild.fetch_emojis()
- 
+channels = {}
 
 class RequestView(nextcord.ui.View):
     def __init__(self, stations_list, stations_coowners_list):
@@ -89,7 +36,7 @@ class RequestView(nextcord.ui.View):
         owners_list = []
         request_items_message = ""
         
-        self.city = _get_city_by_id(interaction.channel.parent_id)
+        self.city = channels[interaction.channel.parent_id]
         print(interaction.channel.name[-12])
         if 'solo' in interaction.channel.name[-12:]:
             self.request_type = 'solo'
@@ -107,9 +54,7 @@ class RequestView(nextcord.ui.View):
             self.avaiable_stations += 1
 
         self.message = await interaction.channel.history(limit=2, oldest_first=True).flatten()
-        
 
-        city = _get_city_by_id(interaction.channel.parent_id)
         # loop through each reaction and get the station name if it has more than one reaction
         for reaction in reactions:
             if reaction.count > 1:
@@ -124,7 +69,7 @@ class RequestView(nextcord.ui.View):
                         owners_list.append(owner)
  
                         # add co-owners to the owners list
-                        if city in self.stations_coowners_list and request in self.stations_coowners_list[self.city] and owner in self.stations_coowners_list[self.city][request]:
+                        if self.city in self.stations_coowners_list and request in self.stations_coowners_list[self.city] and owner in self.stations_coowners_list[self.city][request]:
                             for coowner in self.stations_coowners_list[self.city][request][owner]:
                                 if coowner not in owners_list:
                                     owners_list.append(coowner)
@@ -180,32 +125,57 @@ class ButtonCog(commands.Cog):
         self.stations_images = None
         self.emojis_array = None
         self.parse_values.start()
-        self.bot.loop.create_task(self.create_views())
-        self.persistent_views_added = False
+        self.bot.loop.create_task(self._create_autorequest_list())
+        self.bot.loop.create_task(self._create_views())
         
-        
-    async def create_views(self):
+    # Returns city string based on interaction.channel.id
+
+    # Updates station owners list
+    def _update_stations_list(self):
+        for city, station_name, owner_id in database.get_data('stations', columns='DISTINCT city, station_name, owner_id'):
+            self.stations_list.setdefault(city, {}).setdefault(station_name, []).append(owner_id)
+
+    # Updates station co-owners list
+    def _update_stations_coowners_list(self):
+        for city, station_name, owner_id, coowner_id in database.get_data('stations_coowners', columns='DISTINCT city, station_name, owner_id, coowner_id'):
+            self.stations_coowners_list.setdefault(city, {}).setdefault(station_name, {}).setdefault(owner_id, []).append(coowner_id)
+
+    # Updates station image in database
+    def _update_stations_images(self):
+        self.stations_images = {city: image_link for city, image_link in database.get_data('images', columns='DISTINCT city, image_link')}
+
+    # Updates emojis array
+    async def _update_emojis(self):
+        guild = self.bot.get_guild(SERVER_ID)
+        self.emojis_array = await guild.fetch_emojis()
+    
+    # Creates list containing city : city.id for each autorequest channel
+    async def _create_autorequest_list(self):
+        await self.bot.wait_until_ready()
+        guild = self.bot.get_guild(SERVER_ID)
+        global channels
+        channels = {channel.name[2:channel.name.index("-")]: channel.id for channel in guild.text_channels if 'autorequest' in channel.name}
+
+    # Creates persistent views
+    async def _create_views(self):
         if getattr(self.bot, "request_view_set", False) is False:
             await self.bot.wait_until_ready()
             self.bot.request_view_set = True
-            self.bot.add_view(RequestView(self.stations_list,
-                              self.stations_coowners_list))
-            self.bot.persistent_views_added = True
-            print(self.bot.persistent_views)
+            self.bot.add_view(RequestView(self.stations_list,self.stations_coowners_list))
+            print(f"Persistent views found: {self.bot.persistent_views}")
     
     @tasks.loop(seconds=5)
     async def parse_values(self):
         if not self.parsed:
             await self.bot.wait_until_ready()
-            print("Parsing")
-            self.emojis_array = await _update_emojis(self.bot)
-            self.stations_coowners_list = _update_stations_coowners_list()
-            self.stations_list = _update_stations_list()
-            self.stations_images = _update_stations_images()
+            await self._update_emojis()
+            self._update_stations_coowners_list()
+            self._update_stations_list()
+            self._update_stations_images()
             self.parsed = True
 
     # Command for users to request a station
-    @nextcord.slash_command(description="Request for associate", guild_ids=[int(os.getenv('TESTSERVER_ID'))])
+    @nextcord.slash_command(description="Request for associate", guild_ids=[SERVER_ID])
     async def request(
         self,
         interaction: nextcord.Interaction,
@@ -218,9 +188,8 @@ class ButtonCog(commands.Cog):
             description="Write full name of you character/guild/alliance accordingly to your previous choice."),
     ):
         print(f'{interaction.user} has used request in {interaction.channel} at {datetime.datetime.utcnow().strftime("%Y-%m-%d, %H:%M")} UTC\nInteraction message : {interaction.data}')
-        channel = interaction.channel.id
         # Get city from interaction channel
-        city = _get_city_by_id(channel)
+        city = channels[interaction.channel.id]
 
         # Check if command is being used in correct channel
         if str(interaction.channel.id) not in request_channels:
@@ -297,15 +266,3 @@ class ButtonCog(commands.Cog):
                 except:
                     print(
                         "Error adding reaction. Probably the embed has beed already deleted.")
-
-    @nextcord.slash_command(description="Command for testing.", guild_ids=[int(os.getenv('TESTSERVER_ID'))], default_member_permissions=8)
-    async def help_menu(self, interaction: nextcord.Interaction):
-        await interaction.channel.send(
-            content="**:white_check_mark: If you've read the guidelines above, click a button to create a help thread!**",
-            view=RequestView(self.stations_list, self.stations_coowners_list),
-        )
-        print(self.bot.persistent_views)
-
-        
-def setup(bot):
-    bot.add_cog(ButtonCog(bot))
