@@ -57,6 +57,8 @@ class ExtrasCog(commands.Cog):
         }),
         reason: str = SlashOption(description="The reason for timeout") 
     ):
+        print(f'{interaction.user} has used custom_timeout in {interaction.channel} at {datetime.datetime.utcnow().strftime("%Y-%m-%d, %H:%M")} UTC\nInteraction message : {interaction.data}')
+
         await self.bot.wait_until_ready()
         m_list = await self._get_members_by_id(users)
         
