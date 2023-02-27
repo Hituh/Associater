@@ -13,9 +13,9 @@ from database import database
 from dotenv import load_dotenv, find_dotenv
 
 load_dotenv(find_dotenv())
-
-TOKEN = os.getenv('DISCORD_TOKEN')
 SERVER_ID = int(os.getenv('TESTSERVER_ID'))
+TOKEN = os.getenv('DISCORD_TOKEN')
+
 
 intents = nextcord.Intents(members = True, emojis = True, reactions = True, guilds = True, messages = True, message_content = True)
 bot = commands.Bot(intents=intents)
