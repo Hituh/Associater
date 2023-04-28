@@ -325,7 +325,7 @@ async def set_image(
     await interaction.response.send_message(f"Image for {city} updated succesfully", ephemeral=True, delete_after=30)         
 
 # Deletes given amount of messages from interaction.channel
-@bot.slash_command(description="Bulk deletes messages from current channel.", guild_ids=[SERVER_ID], default_member_permissions=8)  
+@bot.slash_command(description="Bulk deletes messages from current channel.", guild_ids=[SERVER_ID], default_member_permissions=8)
 async def delete_messages(
     interaction: nextcord.Interaction, 
     amount: int = SlashOption(description="Amount of messages to delete.")):
@@ -333,8 +333,8 @@ async def delete_messages(
     if amount > 100:
         await interaction.response.send_message(f"Amount needs to be less than 100.", ephemeral=True, delete_after=5) 
     else:
-        await interaction.channel.purge(limit = amount)
-        await interaction.response.send_message(f"Done deleting {amount} messages.", ephemeral=True, delete_after=5)    
+        await interaction.response.send_message(f"Deleting {amount} messages.", ephemeral=True, delete_after=5)
+        await interaction.channel.purge(limit = amount) 
     
 # TDeveloping test command         
 @bot.slash_command(description="Command for testing. Don't use it. Can do nothing, or can break everything.", guild_ids=[SERVER_ID], default_member_permissions=8)
