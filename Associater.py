@@ -94,10 +94,17 @@ async def _prepare_variables():
 
 #Returns user id. Takes user class or user name as input.
 def _get_user_id(value):
-    guild = bot.get_guild(SERVER_ID)
-    user_id = next((int(value[2:-1]) for member in guild.members if str(member) == value), None)
-    if user_id is None:
-        user_id = next((member.id for member in guild.members if member.name.lower() == value.lower()), None)
+    print(value)
+    user_id = None
+    if len(value[2:-1]) == 18 and value[2:-1].isdigit():
+        user_id = value[2:-1]
+    if (user_id == None):
+        guild = bot.get_guild(SERVER_ID)
+        for member in guild.members:
+            print(member.nick)
+            if (member.nick is not None and member.nick == value) or member.name == value:
+                user_id = member.id
+    
     print(user_id)
     return user_id
    

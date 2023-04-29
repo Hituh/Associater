@@ -24,7 +24,7 @@ class CloseView(nextcord.ui.View):
         super().__init__(timeout=None)
         
     @nextcord.ui.button(label="Finish", style=nextcord.ButtonStyle.green, custom_id="requestfinish")
-    async def cancel(self, interaction: Interaction):
+    async def cancel(self, button: nextcord.ui.Button, interaction: Interaction):
         print(f"{interaction.user} has closed the thread {interaction.channel}")
         await interaction.channel.delete()
     
@@ -39,15 +39,25 @@ class RequestView(nextcord.ui.View):
         self.avaiable_stations = 0
         self.message = None
 
+    @nextcord.ui.button(label="Cancel", style=nextcord.ButtonStyle.red, custom_id="requestcancel")
+    async def cancel(self, button: nextcord.ui.Button, interaction: Interaction):
+        print(f"{interaction.user} has closed the thread {interaction.channel}")
+        await interaction.channel.delete()
+        
     @nextcord.ui.button(label="Confirm", style=nextcord.ButtonStyle.blurple, custom_id="requestconfirm")
-    async def finish(self, interaction: Interaction):
+    async def finish(self, button: nextcord.ui.Button, interaction: Interaction):
         reactions = interaction.message.reactions
+
+        self.message = await interaction.channel.history(limit=2, oldest_first=True).flatten()
+
+        if len(reactions) == 0:
+            reactions = self.message[1].reactions
+
         stations_to_add = []
         owners_list = []
         request_items_message = ""
-        
         self.city = channels[interaction.channel.parent_id]
-        print(interaction.channel.name[-12])
+
         if 'solo' in interaction.channel.name[-12:]:
             self.request_type = 'solo'
             self.name = interaction.channel.name[:len(interaction.channel.name)-12]
@@ -59,11 +69,9 @@ class RequestView(nextcord.ui.View):
         if 'alliance' in interaction.channel.name[-16:]:
             self.request_type = 'alliance'
             self.name=interaction.channel.name[:len(interaction.channel.name)-16]
-        for station in self.stations_list[self.city]:
-            # Count the available stations
-            self.avaiable_stations += 1
 
-        self.message = await interaction.channel.history(limit=2, oldest_first=True).flatten()
+        # Count the available stations
+        self.avaiable_stations = len([station for station in self.stations_list[self.city]])
 
         # loop through each reaction and get the station name if it has more than one reaction
         for reaction in reactions:
@@ -86,7 +94,7 @@ class RequestView(nextcord.ui.View):
          
         # if no stations were selected, send a message indicating so
         if not stations_to_add:
-            await interaction.response.send_message("```If it wasn't obvious you need to choose at least one station you'd like to request.```", ephemeral=True, delete_after=30)
+            await interaction.response.send_message("```Please select stations you'd like to request by using emotes under the message above.```", ephemeral=True, delete_after=30)
  
         # if stations were selected, send a message to the owners list with the request
         else:
@@ -111,9 +119,10 @@ class RequestView(nextcord.ui.View):
                 await interaction.channel.send(embed=embed)
                  
             await self.message[1].delete()
+            await interaction.channel.edit(auto_archive_duration=1440, name='? ' + interaction.channel.name)
             
     @nextcord.ui.button(label="Cancel", style=nextcord.ButtonStyle.red, custom_id="requestcancel")
-    async def cancel(self, interaction: Interaction):
+    async def cancel(self, button: nextcord.ui.Button, interaction: Interaction):
         print(f"{interaction.user} has closed the thread {interaction.channel}")
         await interaction.channel.delete()
         
@@ -132,8 +141,6 @@ class ButtonCog(commands.Cog):
         self.bot.loop.create_task(self._create_autorequest_list())
         self.bot.loop.create_task(self._create_views())
         
-    # Returns city string based on interaction.channel.id
-
     # Updates station owners list
     def _update_stations_list(self):
         for city, station_name, owner_id in database.get_data('stations', columns='DISTINCT city, station_name, owner_id'):
@@ -201,6 +208,7 @@ class ButtonCog(commands.Cog):
         if str(interaction.channel.id) not in request_channels:
             await interaction.response.send_message(f"You shouldn't use that command here. Please use it in your city of choice: {' '.join([f'<#{channel}> ' for channel in request_channels])}", ephemeral=True, delete_after=30)
             return
+        
         name_check = id_scrapper(name)
         if type != 'alliance' and not name_check:
             if type == 'solo':
@@ -216,7 +224,7 @@ class ButtonCog(commands.Cog):
 
         # Check for existing threads by user
         for thread in interaction.channel.threads:
-            if name in thread.name[:-8] and type in thread.name[len(name):-8] and type == 'guild' or type == 'alliance':
+            if name in thread.name[:-8] and type in thread.name[len(name):-8] and (type == 'guild' or type == 'alliance'):
                 await interaction.response.send_message(f"*Looks like there is already thread for {type} {name} - <#{thread.id}>*", ephemeral=True, delete_after=15)
                 await thread.send(f"Adding <@{interaction.user.id}> to the thread to avoid duplicates. If there is anything wrong please let us know")
                 return
@@ -291,10 +299,10 @@ class ButtonCog(commands.Cog):
         for thread in threads_list:
             diff = int(((datetime.datetime.utcnow().replace(tzinfo=pytz.utc)) -
                        (thread.created_at - datetime.timedelta(seconds=0))).total_seconds())
-            if diff > amount and not thread.archived and '✔ ' not in thread.name:
+            if diff > amount and not thread.archived and '✔ ' not in thread.name and '? ' in thread.name:
                 counter += 1
                 # Set the thread's auto-archive duration to 24 hours
-                await thread.edit(auto_archive_duration=1440, name='✔  ' + thread.name)
+                await thread.edit(auto_archive_duration=1440, name='✔  ' + thread.name[2:])
 
                 # Send a finish message to the thread's owner
                 first_message = await thread.history(oldest_first=True, limit=1).flatten()
