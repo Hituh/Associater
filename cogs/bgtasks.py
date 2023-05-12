@@ -1,5 +1,6 @@
 import nextcord
 import os
+import datetime
 
 from nextcord.ext import tasks, commands
 from dotenv import load_dotenv, find_dotenv
@@ -31,6 +32,21 @@ class TaskCog(commands.Cog):
     async def archived_delete(self):
         await self.bot.wait_until_ready()
         for channel in self.request_channels:
-            async for thread in channel.archived_threads(private = True):
-                print(f"Deleted archived thread : {thread.name}")
-                await thread.delete()
+            for thread in channel.threads:
+                messages = await thread.history(limit=2, oldest_first=True).flatten()
+                recent_message = await thread.history(limit=1, oldest_first=False).flatten()
+                if len(messages[1].embeds) > 0:
+                    if (datetime.datetime.utcnow().date() - recent_message[0].created_at.date()).days > 1:
+                        print(f"{thread.name} is freshly created, but hasn't received any messages in past 2 days. Deleting...")
+                        await thread.delete()
+                if len(messages[1].embeds) == 0 and thread.name[0] == '?':
+                    # check the message for it's sent date. If the message is older than 3 days, delete the thread.
+                    if (datetime.datetime.utcnow().date() - recent_message[0].created_at.date()).days > 7:
+                        print(f"{thread.name} was waiting for approval, but hasn't received any messages in past 7 days. Deleting...")
+                        await thread.delete()
+                if len(messages[1].embeds) == 0 and thread.name[0] == '✔':
+                    #check the message for it's sent date. If the message is older than 3 days, delete the thread.  
+                    if (datetime.datetime.utcnow().date() - recent_message[0].created_at.date()).days > 3:
+                        print(f"{thread.name} is completed and hasn't received any messages in past 3 days. Deleting...")
+                        await thread.delete()
+

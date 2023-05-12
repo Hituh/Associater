@@ -7,8 +7,8 @@ from typing import Optional
 from nextcord import Interaction, SlashOption, Colour
 from nextcord.ext import commands
 from cogs.bgtasks import TaskCog
-from cogs.extras import ExtrasCog
 from cogs.buttons import ButtonCog
+from cogs.muted import MutedCog
 from database import database
 from dotenv import load_dotenv, find_dotenv
 
@@ -354,14 +354,16 @@ if __name__ == '__main__':
     database.create_table('stations_coowners', [('city', 'TEXT'), ('station_name', 'TEXT'), ('owner_id', 'INTEGER'), ('coowner_id', 'INTEGER')])
     database.create_table('stations', [('city', 'TEXT'), ('station_name', 'TEXT'), ('owner_id', 'INTEGER')])
     database.create_table('images', [('city', 'TEXT UNIQUE'), ('image_link', 'TEXT')])
+    database.create_table('muted', [('user_id', 'TEXT'), ('date', 'TEXT'), ('reason', 'TEXT'), ('length', 'TEXT')])
     
     taskCog = TaskCog(bot)
     buttonCog = ButtonCog(bot)
-    extrasCog = ExtrasCog(bot)
+    mutedCog = MutedCog(bot)
+
     
-    bot.add_cog(extrasCog)
     bot.add_cog(buttonCog)
     bot.add_cog(taskCog)
+    bot.add_cog(mutedCog)
 
     bot.run(TOKEN)
     
