@@ -94,18 +94,15 @@ async def _prepare_variables():
 
 #Returns user id. Takes user class or user name as input.
 def _get_user_id(value):
-    print(value)
     user_id = None
     if len(value[2:-1]) == 18 and value[2:-1].isdigit():
         user_id = value[2:-1]
     if (user_id == None):
         guild = bot.get_guild(SERVER_ID)
         for member in guild.members:
-            print(member.nick)
             if (member.nick is not None and member.nick == value) or member.name == value:
                 user_id = member.id
     
-    print(user_id)
     return user_id
    
 # Displays embed of current stations in chosen city
@@ -134,11 +131,11 @@ async def display_stations(
             description += f'\n**{station.title()}**'
             for owner in owners:
                 description += f'\nOwner - <@{owner}>'
-                if city in stations_coowners_list.get(station, {}) and owner in stations_coowners_list[station][city]:
-                    description += ' Co-owners -'
-                    description += ''.join(f' <@{coowner}>' for coowner in stations_coowners_list[city][station][owner])
+                if city in stations_coowners_list and station in stations_coowners_list[city] and owner in stations_coowners_list[city][station]:
+                    for coowner in stations_coowners_list[city][station][owner]:
+                        description += f'\n   Co-owner - <@{coowner}>'  
  
-        #Embed creation          
+        #Embed creation       
         embedColor = _set_embed_colour(city)
         em = nextcord.Embed(
                 description=description,
@@ -170,7 +167,7 @@ async def owner_stations(
     owner_id = _get_user_id(owner or interaction.user.name)
     stations = []
     for city in stations_list.keys():
-        owner_stations = [f'{city} -> {station}\n' for station in stations_list[city] for owner in stations_list[city][station] if str(owner) == str(owner_id)]
+        owner_stations = [f'{station}\n' for station in stations_list[city] for owner in stations_list[city][station] if str(owner) == str(owner_id)]
         if owner_stations:
             stations.append(f'**{city.title()}**\n```{"".join(owner_stations)}```\n')
     if stations:

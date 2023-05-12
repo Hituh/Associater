@@ -148,7 +148,6 @@ class ButtonCog(commands.Cog):
     def _update_stations_coowners_list(self):
         for city, station_name, owner_id, coowner_id in database.get_data('stations_coowners', columns='DISTINCT city, station_name, owner_id, coowner_id'):
             self.stations_coowners_list.setdefault(city, {}).setdefault(station_name, {}).setdefault(owner_id, []).append(coowner_id)
-
     # Updates station image in database
     def _update_stations_images(self):
         self.stations_images = {city: image_link for city, image_link in database.get_data('images', columns='DISTINCT city, image_link')}

@@ -43,17 +43,14 @@ class MutedCog(commands.Cog):
     # Returns user id. Takes user class or user name as input.
 
     def _get_user_id(self, value):
-        print(value)
         user_id = None
         if len(value[2:-1]) == 18 and value[2:-1].isdigit():
             user_id = value[2:-1]
         if (user_id == None):
             for member in self.guild.members:
-                print(member.nick)
                 if (member.nick is not None and member.nick == value) or member.name == value:
                     user_id = member.id
 
-        print(user_id)
         return user_id
     
     # Takes amount of minutes and returns formatted string
@@ -200,7 +197,8 @@ class MutedCog(commands.Cog):
             
         await interaction.response.send_message(response_message, ephemeral=True, delete_after=30)
         mute_channel = self.guild.get_channel(1101951365393154190)
-        await mute_channel.send(content=mute_channel_message)
+        if mute_channel_message != None:
+            await mute_channel.send(content=mute_channel_message)
 
             
                 
