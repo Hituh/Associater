@@ -17,6 +17,10 @@ valid_cities = ['bridgewatch', 'caerleon', 'fortsterling', 'lymhurst', 'martlock
 valid_stations = ['alchemy', 'butcher', 'cook', 'hunter', 'lumbermill', 'mage', 'mill', 'saddler', 'smelter', 'stonemason', 'tanner', 'toolmaker', 'warrior', 'weaver']
 channels = {}
 
+
+def curr_time():
+    return datetime.datetime.utcnow().strftime("%Y-%m-%d, %H:%M")
+
 class CloseView(nextcord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -199,7 +203,7 @@ class ButtonCog(commands.Cog):
         name: str = SlashOption(
             description="Write full name of you character/guild/alliance accordingly to your previous choice."),
     ):
-        print(f'{interaction.user} has used request in {interaction.channel} at {datetime.datetime.utcnow().strftime("%Y-%m-%d, %H:%M")} UTC')
+        print(f'{interaction.user} has used request in {interaction.channel} at {curr_time()} UTC')
         print(f'{interaction.data}')
         await interaction.response.defer(ephemeral=True, with_message=True)
 
@@ -270,7 +274,7 @@ class ButtonCog(commands.Cog):
         if city in self.stations_images:
             stations_embed.set_image(self.stations_images[city.lower()])
         stations_embed.set_footer(
-            text=f'Thread opened at {datetime.datetime.utcnow().strftime("%Y-%m-%d, %H:%M")} UTC\n',)
+            text=f'Thread opened at {curr_time()} UTC\n',)
 
         # Create the request button and add it to the embed
         await thread.send(embed=stations_embed, view=RequestView(self.stations_list, self.stations_coowners_list))
@@ -314,7 +318,7 @@ class ButtonCog(commands.Cog):
     #     interaction: nextcord.Interaction,
     #     age: int = SlashOption(description="Threads age in seconds.")):
 
-    #     print(f'{interaction.user} has used set_done in {interaction.channel} at {datetime.datetime.utcnow().strftime("%Y-%m-%d, %H:%M")} UTC\nInteraction message : {interaction.data}')
+    #     print(f'{interaction.user} has used set_done in {interaction.channel} at {curr_time()} UTC\n')
 
     #     counter = 0
 
