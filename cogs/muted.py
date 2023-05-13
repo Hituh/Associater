@@ -13,6 +13,9 @@ from dotenv import load_dotenv, find_dotenv
 load_dotenv(find_dotenv())
 SERVER_ID = int(os.getenv('TESTSERVER_ID'))
 
+def curr_time():
+    return datetime.datetime.utcnow().strftime("%Y-%m-%d, %H:%M")
+
 class MutedCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -77,7 +80,7 @@ class MutedCog(commands.Cog):
         name: Optional[str] = SlashOption(
             name='name', description='If previously selected "Person", write their name here')
     ):
-        print(f'{interaction.user} has used show_muted_members in {interaction.channel} at {datetime.datetime.utcnow().strftime("%Y-%m-%d, %H:%M")} UTC')
+        print(f'{interaction.user} has used show_muted_members in {interaction.channel} at {curr_time()} UTC')
         print(f'{interaction.data}')
         await interaction.response.defer(ephemeral=True, with_message=True)
 
@@ -132,7 +135,7 @@ class MutedCog(commands.Cog):
                           interaction: nextcord.Interaction,
                           name: str = SlashOption(name='name', description='Name of the person you want to remove from muted members')
                           ):
-        print(f'{interaction.user} has used clear_mutes in {interaction.channel} at {datetime.datetime.utcnow().strftime("%Y-%m-%d, %H:%M")} UTC')
+        print(f'{interaction.user} has used clear_mutes in {interaction.channel} at {curr_time()} UTC')
         print(f'{interaction.data}')
         await interaction.response.defer(ephemeral=True, with_message=True)
 
@@ -147,7 +150,7 @@ class MutedCog(commands.Cog):
 
     @nextcord.slash_command(description="Mutes selected members", guild_ids=[SERVER_ID], default_member_permissions=8)
     async def mute(self, interaction: nextcord.Interaction, users: str = SlashOption(description="User or users to timeout"), reason: str = SlashOption(description="The reason for timeout")):
-        print(f'{interaction.user} has used mute in {interaction.channel} at {datetime.datetime.utcnow().strftime("%Y-%m-%d, %H:%M")} UTC')
+        print(f'{interaction.user} has used mute in {interaction.channel} at {curr_time()} UTC')
         print(f'{interaction.data}')
     
         await self.bot.wait_until_ready()
@@ -184,19 +187,19 @@ class MutedCog(commands.Cog):
                     duration = '1 week'
                     await member.edit(reason=reason, timeout=datetime.timedelta(minutes=10080))
                     response_message += f'{member.mention} has been timed out for 1 week. It is his {self.ordinal(count)} or higher timeout.\n'
-                mute_channel_message += f'• Timed out {member.mention}\n     For {duration}.\n     Reason: {reason}\n     This is their {self.ordinal(count)} timeout.\n'
+                mute_channel_message += f'• Timed out {member.mention}\n     For {duration}.\n     Reason: {reason}\n     This is their {self.ordinal(count+1)} timeout.\n'
 
             except:
                 response_message += f"Couldn't timeout {member.mention}. The user is administrator or has higher perms than the bot.\n"
                 continue
 
             try:
-                database.insert_data('muted', user_id=member.id, date=datetime.datetime.utcnow().strftime("%Y-%m-%d, %H:%M"), reason=reason, length=duration)
+                database.insert_data('muted', user_id=member.id, date=curr_time(), reason=reason, length=duration)
             except:
                 response_message += f'There has been an error inserting {member.mention} into the database. Please contact the bot developer.\n'
             
         await interaction.response.send_message(response_message, ephemeral=True, delete_after=30)
-        mute_channel = self.guild.get_channel(1101951365393154190)
+        mute_channel = self.guild.get_channel(1106649636594266275)
         if mute_channel_message != None:
             await mute_channel.send(content=mute_channel_message)
 

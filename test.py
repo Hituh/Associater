@@ -1,13 +1,6 @@
-# import mysql.connector
+my_string = "hunter, warrior,mage, toolmaker"
+my_array = my_string.split(",")
 
-# mydb = mysql.connector.connect(
-#     host='localhost',
-#     user='root',
-# )
-
-# mycursor = mydb.cursor()
-
-# mycursor.execute("SHOW DATABASES")
-
-# for x in mycursor:
-#     # print(x)
+for i in range(len(my_array)):
+    my_array[i] = my_array[i].replace(" ", "")
+print(my_array)
