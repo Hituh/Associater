@@ -147,9 +147,6 @@ class ButtonCog(commands.Cog):
     def _update_stations_list(self):
         for city, station_name, owner_id in database.get_data('stations', columns='DISTINCT city, station_name, owner_id'):
             self.stations_list.setdefault(city, {}).setdefault(station_name, []).append(owner_id)
-
-        print("self.stations_list")
-
     # Updates station co-owners list
     def _update_stations_coowners_list(self):
         for owner_id, coowner_id in database.get_data('stations_coowners', columns='DISTINCT owner_id, coowner_id'):
@@ -157,8 +154,8 @@ class ButtonCog(commands.Cog):
 
     # Updates station image in database
     def _update_stations_images(self):
-        self.stations_images = {city: image_link for city, image_link in database.get_data('images', columns='DISTINCT city, image_link')}
-
+        for city, image_link in database.get_data('images', columns='DISTINCT city, image_link'):
+            self.stations_images.setdefault(city, []).append(image_link)
     # Updates emojis array
     async def _update_emojis(self):
         guild = self.bot.get_guild(SERVER_ID)
@@ -223,7 +220,6 @@ class ButtonCog(commands.Cog):
             if type == 'guild':
                 await interaction.followup.send(f"Couldn't find guild with name {name}. Are you sure you wrote your guild name correctly?", ephemeral=True, delete_after=30)
             return
-        print(self.stations_coowners_list)
         # Check if city has available stations
         if city not in self.stations_list:
             await interaction.followup.send(f"This city doesn't have any stations available. Please wait for updates.", ephemeral=True, delete_after=30)
@@ -240,8 +236,8 @@ class ButtonCog(commands.Cog):
                 return
 
         # Create new thread and send confirmation message
-        thread = await interaction.channel.create_thread(name=f"{name} {type} request", message=None, auto_archive_duration=10080, type=None)
-        await interaction.followup.send(f"*Here is your request - <#{thread.id}>.\nUntil you submit your request the thread will be closed after 60 minutes of inactivity.*", ephemeral=True, delete_after=15)
+        thread = await interaction.channel.create_thread(name=f"{name} {type} request", message=None, auto_archive_duration=1440, type=None)
+        await interaction.followup.send(f"*Here is your request - <#{thread.id}>.\nUntil you submit your request the thread will be closed after 1 day of inactivity.*", ephemeral=True, delete_after=15)
         await thread.add_user(interaction.user)
 
         # Create the description for the embed
@@ -258,10 +254,10 @@ class ButtonCog(commands.Cog):
 
             # Add the owner and co-owners for the station
             for owner in self.stations_list[city][station]:
-                description += f"\nOwner - <@{str(owner)}>"
+                description += f"\n**• Owner - <@{str(owner)}>**"
                 if owner in self.stations_coowners_list:
                     for coowner in self.stations_coowners_list[owner]:
-                        description += f'   Co-owner - <@{coowner}>'
+                        description += f'\n*- Co-owner - <@{coowner}>*'
 
         # Add additional information to the description
         description += "\nTo succesfully create a request, select stations using emojis below and pressing 'Confirm'\nTo cancel your request, press 'Cancel'. It will close the thread.\n**Use brain while requesting. All unreasonable requests will be ignored.**\n*If something is not working, please contact <@158643072886898688> for help.*"
@@ -270,7 +266,8 @@ class ButtonCog(commands.Cog):
         stations_embed = nextcord.Embed(
             title="Shop Information", description=description)
         if city in self.stations_images:
-            stations_embed.set_image(self.stations_images[city.lower()])
+            stations_embed.set_image(
+                self.stations_images[city.lower()][0]+'.jpg')
         stations_embed.set_footer(
             text=f'Thread opened at {curr_time()} UTC\n',)
 
@@ -284,8 +281,7 @@ class ButtonCog(commands.Cog):
                 try:
                     await embed[0].add_reaction(emoji)
                 except:
-                    print(
-                        "Error adding reaction. Probably the embed has beed already deleted.")
+                    print("Error adding reaction. Probably the embed has beed already deleted.")
 
     @nextcord.message_command(guild_ids=[SERVER_ID], default_member_permissions=8)
     async def close_one(self, interaction: nextcord.Interaction, message: nextcord.Message):
@@ -309,6 +305,7 @@ class ButtonCog(commands.Cog):
                 await thread.edit(name='✔ ' + thread.name[2:])
                 await thread.send(f"<@{first_message[0].mentions[0].id}> your request have been fulfilled.\nIf something's missing ping owners.\nIf everything is correct press the button below to close the thread.\nThread will automatically close after 24 hours.", view=CloseView())
         await interaction.response.send_message(f"Successfully closed {counter} threads.", ephemeral=True, delete_after=30)
+    
     # Sends finish message to all threads older than given amount
     # @nextcord.slash_command(description="Sends close button and done message to all threads older than given amount in the channel.", guild_ids=[SERVER_ID], default_member_permissions=8)
     # async def set_done(

@@ -150,9 +150,21 @@ async def display_stations(
                         description += f'<@{coowner}> '
  
         #Embed creation   
+
         description += f'\n\nPlease use /request for requesting\n*Updated at {curr_time()} UTC*\n'
-        await channel.send(description)
-        await channel.send(image)
+        embedColor = _set_embed_colour(city)
+        print(description)
+        print(stations_images[city.lower()][0])
+        em = nextcord.Embed(
+            description=description,
+            color=embedColor
+            )
+        if city in stations_images:
+            em.set_image(stations_images[city.lower()][0]+'.jpg')
+        em.set_footer(text=f'Updated at {curr_time()} UTC\n')
+
+        await channel.send(embed=em)
+        return
         
     #Displays empty city embed
     elif city not in stations:
@@ -227,13 +239,12 @@ async def add_coowner(
                     await interaction.followup.send(f"<@{coowner_id}> is already co-owner of <@{owner_id}>'s stations.", ephemeral=True, delete_after=30)
                     return
 
-            else:
-                stations_coowners[owner_id].append(coowner_id)
-                database.insert_data('stations_coowners',
-                                     owner_id=owner_id, coowner_id=coowner_id)
-                await interaction.followup.send(f"<@{coowner_id}> is now co-owner of <@{owner_id}>'s stations.", ephemeral=True, delete_after=30)
-                _update_stations_coowners()
-                return
+                else:
+                    stations_coowners[int(owner_id)].append(coowner_id)
+                    database.insert_data('stations_coowners', owner_id=owner_id, coowner_id=coowner_id)
+                    await interaction.followup.send(f"<@{coowner_id}> is now co-owner of <@{owner_id}>'s stations.", ephemeral=True, delete_after=30)
+                    _update_stations_coowners()
+                    return
 
     if owner_id not in stations_coowners:
         stations_coowners[owner_id] = [coowner_id]
