@@ -87,12 +87,12 @@ class RequestView(nextcord.ui.View):
                 for owner in self.stations_list[self.city][request]:
                     if owner not in owners_list:
                         owners_list.append(owner)
- 
-                        # add co-owners to the owners list
-                        if self.city in self.stations_coowners_list and request in self.stations_coowners_list[self.city] and owner in self.stations_coowners_list[self.city][request]:
-                            for coowner in self.stations_coowners_list[self.city][request][owner]:
+                        if owner in self.stations_coowners_list:
+                            for coowner in self.stations_coowners_list[owner]:
                                 if coowner not in owners_list:
                                     owners_list.append(coowner)
+                        # add co-owners to the owners list
+                        
          
         # if no stations were selected, send a message indicating so
         if not stations_to_add:
@@ -148,10 +148,13 @@ class ButtonCog(commands.Cog):
         for city, station_name, owner_id in database.get_data('stations', columns='DISTINCT city, station_name, owner_id'):
             self.stations_list.setdefault(city, {}).setdefault(station_name, []).append(owner_id)
 
+        print("self.stations_list")
+
     # Updates station co-owners list
     def _update_stations_coowners_list(self):
-        for city, station_name, owner_id, coowner_id in database.get_data('stations_coowners', columns='DISTINCT city, station_name, owner_id, coowner_id'):
-            self.stations_coowners_list.setdefault(city, {}).setdefault(station_name, {}).setdefault(owner_id, []).append(coowner_id)
+        for owner_id, coowner_id in database.get_data('stations_coowners', columns='DISTINCT owner_id, coowner_id'):
+            self.stations_coowners_list.setdefault(owner_id, []).append(coowner_id)
+
     # Updates station image in database
     def _update_stations_images(self):
         self.stations_images = {city: image_link for city, image_link in database.get_data('images', columns='DISTINCT city, image_link')}
@@ -192,17 +195,13 @@ class ButtonCog(commands.Cog):
 
     # Command for users to request a station
     @nextcord.slash_command(description="Request for associate", guild_ids=[SERVER_ID])
-    async def request(
-        self,
-        interaction: nextcord.Interaction,
+    async def request(self,interaction: nextcord.Interaction,
         type: str = SlashOption(description="Type of your request. Select accordingly.", choices={
             'Personal': 'solo',
             'Guild': 'guild',
             'Alliance': 'alliance'}
         ),
-        name: str = SlashOption(
-            description="Write full name of you character/guild/alliance accordingly to your previous choice."),
-    ):
+        name: str = SlashOption(description="Write full name of you character/guild/alliance accordingly to your previous choice."),):
         print(f'{interaction.user} has used request in {interaction.channel} at {curr_time()} UTC')
         print(f'{interaction.data}')
         await interaction.response.defer(ephemeral=True, with_message=True)
@@ -224,7 +223,7 @@ class ButtonCog(commands.Cog):
             if type == 'guild':
                 await interaction.followup.send(f"Couldn't find guild with name {name}. Are you sure you wrote your guild name correctly?", ephemeral=True, delete_after=30)
             return
-
+        print(self.stations_coowners_list)
         # Check if city has available stations
         if city not in self.stations_list:
             await interaction.followup.send(f"This city doesn't have any stations available. Please wait for updates.", ephemeral=True, delete_after=30)
@@ -260,13 +259,12 @@ class ButtonCog(commands.Cog):
             # Add the owner and co-owners for the station
             for owner in self.stations_list[city][station]:
                 description += f"\nOwner - <@{str(owner)}>"
-                if city in self.stations_coowners_list and station in self.stations_coowners_list[city] and owner in self.stations_coowners_list[city][station]:
-                    description += " Co-owners -" + \
-                        ''.join(
-                            [f" <@{str(coowner)}>" for coowner in self.stations_coowners_list[city][station][owner]])
+                if owner in self.stations_coowners_list:
+                    for coowner in self.stations_coowners_list[owner]:
+                        description += f'   Co-owner - <@{coowner}>'
 
         # Add additional information to the description
-        description += "\nTo succesfully create a request, select stations using emojis below and pressing 'Confirm'\nTo cancel your request, press 'Cancel'. It will close the thread.\n**Use brain while requesting. All unreasonable requests will be ignored.**\n*If by any chance button are not responding, please contact <@158643072886898688> for help.*"
+        description += "\nTo succesfully create a request, select stations using emojis below and pressing 'Confirm'\nTo cancel your request, press 'Cancel'. It will close the thread.\n**Use brain while requesting. All unreasonable requests will be ignored.**\n*If something is not working, please contact <@158643072886898688> for help.*"
 
         # Create the embed and add the footer
         stations_embed = nextcord.Embed(

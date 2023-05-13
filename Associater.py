@@ -48,6 +48,10 @@ stations_coowners = {}
 emojis = []
 request_channels = []
 
+#Returns preformatted current time value
+def curr_time():
+    return datetime.datetime.utcnow().strftime("%Y-%m-%d, %H:%M")
+
 # Finding all autorequest channels in guild. Channels need to have 'autorequest' in their name
 def _get_autorequest_channels():
     global request_channels
@@ -84,9 +88,6 @@ def _update_stations_coowners():
     for owner_id, coowner_id in database.get_data('stations_coowners', columns='DISTINCT owner_id, coowner_id'):
         stations_coowners.setdefault(owner_id, []).append(coowner_id)
     buttonCog.parsed = False
-    
-def curr_time():
-    return datetime.datetime.utcnow().strftime("%Y-%m-%d, %H:%M")
 
 # Updates station image in database      
 def _update_stations_images():
