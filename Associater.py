@@ -153,8 +153,6 @@ async def display_stations(
 
         description += f'\n\nPlease use /request for requesting\n*Updated at {curr_time()} UTC*\n'
         embedColor = _set_embed_colour(city)
-        print(description)
-        print(stations_images[city.lower()][0])
         em = nextcord.Embed(
             description=description,
             color=embedColor
