@@ -254,10 +254,12 @@ class ButtonCog(commands.Cog):
 
             # Add the owner and co-owners for the station
             for owner in self.stations_list[city][station]:
-                description += f"\n**• Owner - <@{str(owner)}>**"
                 if owner in self.stations_coowners_list:
-                    for coowner in self.stations_coowners_list[owner]:
-                        description += f'\n*- Co-owner - <@{coowner}>*'
+                    description += f"\n**• Owner - <@{str(owner)}>**\n"
+                    if self.stations_coowners_list[owner] != None:
+                        description += "• Coowners: "
+                        for coowner in self.stations_coowners_list[owner]:
+                            description += f'<@{coowner}> '
 
         # Add additional information to the description
         description += "\nTo succesfully create a request, select stations using emojis below and pressing 'Confirm'\nTo cancel your request, press 'Cancel'. It will close the thread.\n**Use brain while requesting. All unreasonable requests will be ignored.**\n*If something is not working, please contact <@158643072886898688> for help.*"
