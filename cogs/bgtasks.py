@@ -36,7 +36,7 @@ class TaskCog(commands.Cog):
                 messages = await thread.history(limit=2, oldest_first=True).flatten()
                 recent_message = await thread.history(limit=1, oldest_first=False).flatten()
                 timedelta = datetime.datetime.utcnow().date() - recent_message[0].created_at.date()
-                days = timedelta.total_seconds()
+                days = timedelta.total_seconds() /3600 /24
                 
 
                 thread_mark = thread.name[:2]
