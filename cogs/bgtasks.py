@@ -35,18 +35,22 @@ class TaskCog(commands.Cog):
             for thread in channel.threads:
                 messages = await thread.history(limit=2, oldest_first=True).flatten()
                 recent_message = await thread.history(limit=1, oldest_first=False).flatten()
-                if len(messages[1].embeds) > 0:
-                    if (datetime.datetime.utcnow().date() - recent_message[0].created_at.date()).days > 1:
-                        print(f"{thread.name} is freshly created, but hasn't received any messages in past 2 days. Deleting...")
-                        await thread.delete()
-                if len(messages[1].embeds) == 0 and thread.name[0] == '?':
-                    # check the message for it's sent date. If the message is older than 3 days, delete the thread.
-                    if (datetime.datetime.utcnow().date() - recent_message[0].created_at.date()).days > 7:
-                        print(f"{thread.name} was waiting for approval, but hasn't received any messages in past 7 days. Deleting...")
-                        await thread.delete()
-                if len(messages[1].embeds) == 0 and thread.name[0] == '✔':
-                    #check the message for it's sent date. If the message is older than 3 days, delete the thread.  
-                    if (datetime.datetime.utcnow().date() - recent_message[0].created_at.date()).days > 3:
-                        print(f"{thread.name} is completed and hasn't received any messages in past 3 days. Deleting...")
-                        await thread.delete()
+                timedelta = datetime.datetime.utcnow().date() - recent_message[0].created_at.date()
+                days = timedelta.total_seconds()
+                
+
+                thread_mark = thread.name[:2]
+                if thread_mark == '✔ ' and days >= 3:
+                    print(f"{thread.name} has been accepted and hasn't received any messages in past 3 days. Deleting...")
+                    await thread.delete()
+                if thread_mark == '? ' and days >= 7:
+                    print(f"{thread.name} is waiting for approval and hasn't received any messages in past 7 days. Deleting...")
+                    await thread.delete()
+                if thread_mark == '⚠ ' and days >= 3:
+                    print(f"{thread.name} has been denied and hasn't received any messages in past 3 days. Deleting...")
+                    await thread.delete()
+                if thread_mark != '✔ ' and thread_mark != '? ' and thread_mark != '⚠ ' and days >= 3:
+                    print(f"{thread.name} is freshly created and hasn't received any messages in past 3 days. Deleting...")
+                    await thread.delete()
+
 

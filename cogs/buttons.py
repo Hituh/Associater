@@ -283,29 +283,76 @@ class ButtonCog(commands.Cog):
                 except:
                     print("Error adding reaction. Probably the embed has beed already deleted.")
 
+    
+
     @nextcord.message_command(guild_ids=[SERVER_ID], default_member_permissions=8)
-    async def close_one(self, interaction: nextcord.Interaction, message: nextcord.Message):
+    async def accept_one(self, interaction: nextcord.Interaction, message: nextcord.Message):
         thread = interaction.channel
         first_message = await thread.history(oldest_first=True, limit=1).flatten()
-
-        if '✔ ' not in thread.name and '? ' in thread.name:
+        thread_mark = thread.name[:2]
+        if thread_mark == '✔ ':
+            await interaction.response.send_message(f"This request has already been accepted.", ephemeral=True, delete_after=30)
+            return
+        if thread_mark == '⚠ ':
+            await interaction.response.send_message(f"This request has already been denied.", ephemeral=True, delete_after=30)
+            return
+        if thread_mark == '? ':
             await thread.edit(name='✔ ' + thread.name[2:])
-            await thread.send(f"<@{first_message[0].mentions[0].id}> your request have been fulfilled.\nIf something's missing ping owners.\nIf everything is correct press the button below to close the thread.\nThread will automatically close after 24 hours.", view=CloseView())
-        else:
-            await interaction.response.send_message(f"This thread is already closed, or it didn't even open yet.", ephemeral=True, delete_after=30)
-    
+            await thread.send(f"**<@{first_message[0].mentions[0].id}> your request have been fulfilled.**\nIf something's missing ping owners.\nIf everything is correct press the button below to close the thread.\nThread will automatically close after 3 days.", view=CloseView())
+            await interaction.response.send_message(f"Finished work.", ephemeral=True, delete_after=5)
+            return
+        
     @nextcord.message_command(guild_ids=[SERVER_ID], default_member_permissions=8)
-    async def close_all(self, interaction: nextcord.Interaction, message: nextcord.Message):
+    async def accept_all(self, interaction: nextcord.Interaction, message: nextcord.Message):
         parent_channel = interaction.channel.parent
         counter = 0
+        counter_all = 0
         for thread in parent_channel.threads:
-            if '✔ ' not in thread.name and '? ' in thread.name:
+            counter_all += 1
+            thread_mark = thread.name[:2]
+            if thread_mark != '✔ ' and thread_mark != 'X ' and thread_mark == '? ':
                 counter += 1
                 first_message = await thread.history(oldest_first=True, limit=1).flatten()
                 await thread.edit(name='✔ ' + thread.name[2:])
-                await thread.send(f"<@{first_message[0].mentions[0].id}> your request have been fulfilled.\nIf something's missing ping owners.\nIf everything is correct press the button below to close the thread.\nThread will automatically close after 24 hours.", view=CloseView())
-        await interaction.response.send_message(f"Successfully closed {counter} threads.", ephemeral=True, delete_after=30)
-    
+                await thread.send(f"<@{first_message[0].mentions[0].id}> your request have been fulfilled.\nIf something's missing ping owners.\nIf everything is correct press the button below to close the thread.\nThread will automatically close after 3 days.", view=CloseView())
+        await interaction.response.send_message(f"Successfully closed {counter} out of {counter_all} active requests.", ephemeral=True, delete_after=30)
+    # Command for users to request a station
+
+    @nextcord.message_command(guild_ids=[SERVER_ID], default_member_permissions=8)
+    async def deny_full(self, interaction: nextcord.Interaction, message: nextcord.Message):
+        thread = interaction.channel
+        first_message = await thread.history(oldest_first=True, limit=1).flatten()
+
+        thread_mark = thread.name[:2]
+        if thread_mark == '✔ ':
+            await interaction.response.send_message(f"This request has already been accepted.", ephemeral=True, delete_after=30)
+            return
+        if thread_mark == '⚠ ':
+            await interaction.response.send_message(f"This request has already been denied.", ephemeral=True, delete_after=30)
+            return
+        if thread_mark == '? ':
+            await thread.edit(name='⚠ ' + thread.name[2:])
+            await thread.send(f"**<@{first_message[0].mentions[0].id}> your request has been fully denied.**\n**Station/s you've chosen are currently full**\nTry choosing other city/stations, or wait until new cycle\nThread will automatically close after 3 days.", view=CloseView())
+            await interaction.response.send_message(f"Finished work.", ephemeral=True, delete_after=5)
+            return
+
+    @nextcord.message_command(guild_ids=[SERVER_ID], default_member_permissions=8)
+    async def deny_unreasonable(self, interaction: nextcord.Interaction, message: nextcord.Message):
+        thread = interaction.channel
+        first_message = await thread.history(oldest_first=True, limit=1).flatten()
+
+        thread_mark = thread.name[:2]
+        if thread_mark == '✔ ':
+            await interaction.response.send_message(f"This request has already been accepted.", ephemeral=True, delete_after=30)
+            return
+        if thread_mark == '⚠ ':
+            await interaction.response.send_message(f"This request has already been denied.", ephemeral=True, delete_after=30)
+            return
+        if thread_mark == '? ':
+            await thread.edit(name='✔ ' + thread.name[2:])
+            await thread.send(f"**<@{first_message[0].mentions[0].id}> your request has been fully denied.**\n**Your request has been deemed unreasonable by our owners**\nMake another request, but this time ask only for stations you'd really use.\nThread will automatically close after 3 days.", view=CloseView())
+            await interaction.response.send_message(f"Finished work.", ephemeral=True, delete_after=5)
+            return
     # Sends finish message to all threads older than given amount
     # @nextcord.slash_command(description="Sends close button and done message to all threads older than given amount in the channel.", guild_ids=[SERVER_ID], default_member_permissions=8)
     # async def set_done(
