@@ -786,15 +786,6 @@ async def delete_messages(
         await interaction.channel.purge(limit=amount)
 
 
-# TDeveloping test command
-@bot.slash_command(
-    description="Command for testing. Don't use it. Can do nothing, or can break everything.",
-    guild_ids=[SERVER_ID],
-    default_member_permissions=8,
-)
-async def test_command(interaction: nextcord.Interaction):
-    print(stations)
-
 
 if __name__ == "__main__":
     database.connect("stations.db")
