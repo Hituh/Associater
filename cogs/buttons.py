@@ -143,19 +143,7 @@ class ButtonCog(commands.Cog):
         self.bot.loop.create_task(self._create_autorequest_list())
         self.bot.loop.create_task(self._create_views())
         
-    # Updates station owners list
-    def _update_stations_list(self):
-        for city, station_name, owner_id in database.get_data('stations', columns='DISTINCT city, station_name, owner_id'):
-            self.stations_list.setdefault(city, {}).setdefault(station_name, []).append(owner_id)
-    # Updates station co-owners list
-    def _update_stations_coowners_list(self):
-        for owner_id, coowner_id in database.get_data('stations_coowners', columns='DISTINCT owner_id, coowner_id'):
-            self.stations_coowners_list.setdefault(owner_id, []).append(coowner_id)
-
-    # Updates station image in database
-    def _update_stations_images(self):
-        for city, image_link in database.get_data('images', columns='DISTINCT city, image_link'):
-            self.stations_images.setdefault(city, []).append(image_link)
+    
     # Updates emojis array
     async def _update_emojis(self):
         guild = self.bot.get_guild(SERVER_ID)
@@ -185,9 +173,6 @@ class ButtonCog(commands.Cog):
         if not self.parsed:
             await self.bot.wait_until_ready()
             await self._update_emojis()
-            self._update_stations_coowners_list()
-            self._update_stations_list()
-            self._update_stations_images()
             self.parsed = True
 
     # Command for users to request a station
@@ -227,11 +212,11 @@ class ButtonCog(commands.Cog):
 
         # Check for existing threads by user
         for thread in interaction.channel.threads:
-            if name in thread.name[:-8] and type in thread.name[len(name):-8] and (type == 'guild' or type == 'alliance'):
+            if name.lower() in thread.name[:-8].lower() and type.lower() in thread.name[len(name):-8].lower() and (type == 'guild' or type == 'alliance'):
                 await interaction.followup.send(f"*Looks like there is already thread for {type} {name} - <#{thread.id}>*", ephemeral=True, delete_after=15)
                 await thread.send(f"Adding <@{interaction.user.id}> to the thread to avoid duplicates. If there is anything wrong please let us know")
                 return
-            if name in thread.name[:-8] and type in thread.name[len(name):-8]:
+            if name.lower() in thread.name[:-8].lower() and type.lower() in thread.name[len(name):-8].lower():
                 await interaction.followup.send(f"*You already have an open thread - <#{thread.id}>*", ephemeral=True, delete_after=15)
                 return
 
@@ -274,7 +259,10 @@ class ButtonCog(commands.Cog):
             text=f'Thread opened at {curr_time()} UTC\n',)
 
         # Create the request button and add it to the embed
-        await thread.send(embed=stations_embed, view=RequestView(self.stations_list, self.stations_coowners_list))
+        try:
+            await thread.send(embed=stations_embed, view=RequestView(self.stations_list, self.stations_coowners_list))
+        except:
+            await thread.send(content=f"Something went wrong. Please ping <@158643072886898688>")
 
         # Add the reactions for the available stations
         embed = await thread.history(limit=1).flatten()

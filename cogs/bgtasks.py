@@ -28,7 +28,7 @@ class TaskCog(commands.Cog):
                     self.request_channels.append(channel)
                     
     # Every 60 seconds removed archived threads from autorequest channnels
-    @tasks.loop(seconds=60)
+    @tasks.loop(seconds=60, reconnect=True)
     async def archived_delete(self):
         await self.bot.wait_until_ready()
         for channel in self.request_channels:
